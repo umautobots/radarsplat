@@ -1,0 +1,158 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "${command:pickArgs}"
+            ]
+        },
+        {
+            "name": "Radar Image Fitting",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_image_fitting.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--img_path", "/mnt/ws-frb/projects/radar_splat/data/boreas/boreas-2021-09-02-11-42/radar/cart/1630597331060160.png",
+                "--iterations", "500",
+                "--num_points", "2000",
+                "--save_imgs",
+
+                // "--model_type", "3dgs",
+                // "--model_type", "3dgs_autograd",
+                "--model_type", "radar",
+
+                // "--camera_model", "pinhole",
+                "--camera_model", "ortho",
+
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+            }
+        },
+        {
+            "name": "Radar Image Fitting - Polar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_image_fitting.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--img_path", "/mnt/ws-frb/projects/radar_splat/data/boreas/boreas-2021-09-02-11-42/radar/1630597331060160.png",
+                "--iterations", "1000",
+                "--num_points", "3000",
+                "--save_imgs",
+
+                // "--model_type", "3dgs",
+                // "--model_type", "3dgs_autograd",
+                // "--model_type", "radar",
+                "--model_type", "radar_sph",
+
+                // "--camera_model", "pinhole",
+                "--camera_model", "ortho",
+
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+            }
+        },
+        {
+            "name": "Trainer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/simple_trainer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "default",
+                "--data_dir", "data/360_v2/garden/",
+                "--data_factor", "4",
+                "--result_dir", "./results/garden",
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+            }
+        },
+        {
+            "name": "RadarTrainer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_simple_trainer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "default",
+                "--init_num_pts", "2000",
+                "--init_opa", "0.1",
+                "--init_scale", "0.5",
+
+                "--strategy.refine_start_iter", "100",
+                "--strategy.reset_every", "300",
+                "--strategy.prune-opa", "0.01",
+
+                "--max-steps", "1000",
+
+                "--max_range", "50",
+
+                "--data_dir", "data/boreas_test/",
+                "--data_factor", "1",
+                "--result_dir", "./results/radar_test",
+
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+                "CUDA_VISIBLE_DEVICES": "1" // single GPU
+            }
+        },
+        {
+            "name": "SonarTrainer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_simple_trainer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "default",
+                "--init_num_pts", "2000",
+                "--init_opa", "0.1",
+                "--init_scale", "0.05",
+
+                "--strategy.refine_start_iter", "100",
+                "--strategy.reset_every", "300",
+                "--strategy.prune-opa", "0.01",
+
+                "--max-steps", "1000",
+                "--intermediate_azimuth_resolution", "0.05",
+
+                // "--max_range", "1.5",
+
+                "--data_dir", "data/sonar_test/",
+                "--data_factor", "1",
+                "--result_dir", "./results/sonar_test",
+
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+                "CUDA_VISIBLE_DEVICES": "1" // single GPU
+            }
+        },
+        {
+            "name": "Unit Test: _cartesian_to_spherical",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "radar/unit_test/test_cartesian_to_spherical.py",
+            "console": "integratedTerminal",
+            "args": [
+            ],
+        },
+    ]
+}

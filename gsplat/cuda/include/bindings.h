@@ -54,6 +54,20 @@ std::tuple<torch::Tensor, torch::Tensor> quat_scale_to_covar_preci_bwd_tensor(
     const bool triu
 );
 
+std::tuple<torch::Tensor, torch::Tensor> cartesian_to_spherical_fwd_tensor(
+    const torch::Tensor &means,  // [N, 3]
+    const torch::Tensor &covars // [N, 6]
+);
+
+std::tuple<torch::Tensor, torch::Tensor> cartesian_to_spherical_bwd_tensor(
+    const torch::Tensor &means,         // [N, 3]
+    const torch::Tensor &covars,        // [N, 6]
+    const torch::Tensor &sph_means,     // [N, 3]
+    const torch::Tensor &sph_covars,    // [N, 6]
+    const torch::Tensor &grad_sph_means,// [N, 3]
+    const torch::Tensor &grad_sph_covars// [N, 6]
+);
+
 std::tuple<torch::Tensor, torch::Tensor> proj_fwd_tensor(
     const torch::Tensor &means,  // [C, N, 3]
     const torch::Tensor &covars, // [C, N, 3, 3]
@@ -486,6 +500,23 @@ fully_fused_projection_packed_bwd_2dgs_tensor(
     const torch::Tensor &v_ray_transforms,  // [nnz, 3, 3]
     const bool viewmats_requires_grad,
     const bool sparse_grad
+);
+
+std::tuple<torch::Tensor, torch::Tensor> rasterize_to_indices_in_range_radargs_tensor(
+    const uint32_t range_start,
+    const uint32_t range_end,           // iteration steps
+    const torch::Tensor transmittances, // [C, image_height, image_width]
+    // Gaussian parameters
+    const torch::Tensor &means2d,   // [C, N, 2]
+    const torch::Tensor &conics,    // [C, N, 3]
+    const torch::Tensor &opacities, // [N]
+    // image size
+    const uint32_t image_width,
+    const uint32_t image_height,
+    const uint32_t tile_size,
+    // intersections
+    const torch::Tensor &tile_offsets, // [C, tile_height, tile_width]
+    const torch::Tensor &flatten_ids   // [n_isects]
 );
 
 void selective_adam_update(

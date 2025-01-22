@@ -308,7 +308,7 @@ def _fully_fused_projection(
 
     b = (covars2d[..., 0, 0] + covars2d[..., 1, 1]) / 2  # (...,)
     v1 = b + torch.sqrt(torch.clamp(b**2 - det, min=0.01))  # (...,)
-    radius = torch.ceil(3.0 * torch.sqrt(v1))  # (...,)
+    radius = torch.ceil(3.0 * torch.sqrt(v1))  # (...,) # largest eigenvalue x3
     # v2 = b - torch.sqrt(torch.clamp(b**2 - det, min=0.01))  # (...,)
     # radius = torch.ceil(3.0 * torch.sqrt(torch.max(v1, v2)))  # (...,)
 
@@ -326,6 +326,7 @@ def _fully_fused_projection(
     radii = radius.int()
     return radii, means2d, depths, conics, compensations
 
+# x=20 y=20 z=0: 474.5683, 450.0000
 
 @torch.no_grad()
 def _isect_tiles(
@@ -517,7 +518,6 @@ def accumulate(
     ).reshape(C, image_height, image_width, 1)
 
     return renders, alphas
-
 
 def _rasterize_to_pixels(
     means2d: Tensor,  # [C, N, 2]

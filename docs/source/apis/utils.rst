@@ -44,3 +44,5 @@ Below are the basic functions that supports the rasterization.
 .. autofunction:: accumulate_2dgs
 
 .. autofunction:: rasterization_2dgs_inria_wrapper
+
+.. autofunction:: rasterize_to_indices_in_range_radargs

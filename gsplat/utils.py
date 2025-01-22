@@ -4,6 +4,42 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+def upper_triangular_to_matrices(covars: Tensor) -> Tensor:
+    """Convert upper triangular elements to 3x3 matrix.
+
+    Args:
+        covars: Upper triangular elements. (..., 6)
+
+    Returns:
+        cov_matrices: (..., 3, 3)
+    """
+    cov_matrices = torch.zeros(covars.shape[0], 3, 3, device=covars.device)
+    cov_matrices[:, 0, 0] = covars[:, 0]  # xx
+    cov_matrices[:, 0, 1] = cov_matrices[:, 1, 0] = covars[:, 1]  # xy
+    cov_matrices[:, 0, 2] = cov_matrices[:, 2, 0] = covars[:, 2]  # xz
+    cov_matrices[:, 1, 1] = covars[:, 3]  # yy
+    cov_matrices[:, 1, 2] = cov_matrices[:, 2, 1] = covars[:, 4]  # yz
+    cov_matrices[:, 2, 2] = covars[:, 5]  # zz
+    return cov_matrices
+
+def matrices_to_upper_triangular(cov_matrices: Tensor) -> Tensor:
+    """Convert 3x3 matrix to upper triangular elements.
+
+    Args:
+        cov_matrices: (..., 3, 3)
+
+    Returns:
+        covars: Upper triangular elements. (..., 6)
+    """
+    covars = torch.stack((
+        cov_matrices[:, 0, 0],
+        cov_matrices[:, 0, 1],
+        cov_matrices[:, 0, 2],
+        cov_matrices[:, 1, 1],
+        cov_matrices[:, 1, 2],
+        cov_matrices[:, 2, 2],
+    ), dim=-1)
+    return covars
 
 def normalized_quat_to_rotmat(quat: Tensor) -> Tensor:
     """Convert normalized quaternion to rotation matrix.

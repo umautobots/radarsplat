@@ -106,6 +106,30 @@ def quat_scale_to_covar_preci(
     )
     return covars if compute_covar else None, precis if compute_preci else None
 
+def cartesian_to_spherical(
+    means: Tensor,  # [N, 3]
+    covars: Tensor  # [N, 6]
+) -> Tuple[Tensor, Tensor]:
+    """
+    Converts Cartesian coordinates and covariances to spherical.
+
+    Args:
+        means (Tensor): Cartesian means, shape (N, 3).
+        covars (Tensor): Cartesian covariances, shape (N, 6).
+
+    Returns:
+        Tuple[Tensor, Tensor]: Spherical means (N, 3) and covariances (N, 6).
+    """
+    # Validate input dimensions
+    assert means.dim() == 2 and means.size(1) == 3, f"Expected means of shape [N, 3], got {means.size()}"
+    assert covars.dim() == 2 and covars.size(1) == 6, f"Expected covars of shape [N, 6], got {covars.size()}"
+
+    # Ensure inputs are contiguous for CUDA operations
+    means = means.contiguous()
+    covars = covars.contiguous()
+
+    # Call the autograd Function
+    return _CartesianToSpherical.apply(means, covars)
 
 def persp_proj(
     means: Tensor,  # [C, N, 3]
@@ -683,6 +707,68 @@ class _QuatScaleToCovarPreci(torch.autograd.Function):
         )
         return v_quats, v_scales, None, None, None
 
+class _CartesianToSpherical(torch.autograd.Function):
+    """
+    Custom PyTorch autograd Function for converting Cartesian coordinates
+    and covariances to spherical coordinates and covariances.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        means: Tensor,  # [N, 3]
+        covars: Tensor  # [N, 6]
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Forward pass: Converts Cartesian coordinates and covariances to spherical.
+
+        Args:
+            means (Tensor): Cartesian means, shape (N, 3).
+            covars (Tensor): Cartesian covariances, shape (N, 6).
+
+        Returns:
+            Tuple[Tensor, Tensor]: Spherical means (N, 3) and covariances (N, 6).
+        """
+
+        sph_means, sph_covars = _make_lazy_cuda_func("cartesian_to_spherical_fwd")(
+            means, covars
+        )
+
+        ctx.save_for_backward(means, covars, sph_means, sph_covars)
+        return sph_means, sph_covars
+
+    @staticmethod
+    def backward(
+        ctx,
+        grad_sph_means: Tensor,  # [N, 3]
+        grad_sph_covars: Tensor  # [N, 6]
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Backward pass: Computes gradients for the Cartesian means and covariances.
+
+        Args:
+            grad_sph_means (Tensor): Gradients of spherical means, shape (N, 3).
+            grad_sph_covars (Tensor): Gradients of spherical covariances, shape (N, 6).
+
+        Returns:
+            Tuple[Tensor, Tensor]: Gradients for Cartesian means (N, 3) and covariances (N, 6).
+        """
+        means, covars, sph_means, sph_covars = ctx.saved_tensors
+
+        grad_means, grad_covars = _make_lazy_cuda_func("cartesian_to_spherical_bwd")(
+            means, covars, sph_means, sph_covars, grad_sph_means, grad_sph_covars
+        )
+
+    # const T *__restrict__ means,       // [N, 3]
+    # const T *__restrict__ covars,      // [N, 6]
+    # const T *__restrict__ sph_means,   // [N, 3]
+    # const T *__restrict__ sph_covars,  // [N, 6]
+    # const T *__restrict__ grad_sph_means, // [N, 3]
+    # const T *__restrict__ grad_sph_covars, // [N, 6]
+    # T *__restrict__ grad_means,        // [N, 3]
+    # T *__restrict__ grad_covars        // [N, 6]
+
+        return grad_means, grad_covars
 
 class _Proj(torch.autograd.Function):
     """Perspective fully_fused_projection on Gaussians."""
@@ -1994,3 +2080,78 @@ class _RasterizeToPixels2DGS(torch.autograd.Function):
             None,
             None,
         )
+
+
+@torch.no_grad()
+def rasterize_to_indices_in_range_radargs(
+    range_start: int,
+    range_end: int,
+    transmittances: Tensor,  # [C, image_height, image_width]
+    means2d: Tensor,  # [C, N, 2]
+    conics: Tensor,  # [C, N, 3]
+    opacities: Tensor,  # [C, N]
+    image_width: int,
+    image_height: int,
+    tile_size: int,
+    isect_offsets: Tensor,  # [C, tile_height, tile_width]
+    flatten_ids: Tensor,  # [n_isects]
+) -> Tuple[Tensor, Tensor, Tensor]:
+    """Rasterizes a batch of Gaussians to images but only returns the indices.
+
+    .. note::
+
+        This function supports iterative rasterization, in which each call of this function
+        will rasterize a batch of Gaussians from near to far, defined by `[range_start, range_end)`.
+        If a one-step full rasterization is desired, set `range_start` to 0 and `range_end` to a really
+        large number, e.g, 1e10.
+
+    Args:
+        range_start: The start batch of Gaussians to be rasterized (inclusive).
+        range_end: The end batch of Gaussians to be rasterized (exclusive).
+        transmittances: Currently transmittances. [C, image_height, image_width]
+        means2d: Projected Gaussian means. [C, N, 2]
+        conics: Inverse of the projected covariances with only upper triangle values. [C, N, 3]
+        opacities: Gaussian opacities that support per-view values. [C, N]
+        image_width: Image width.
+        image_height: Image height.
+        tile_size: Tile size.
+        isect_offsets: Intersection offsets outputs from `isect_offset_encode()`. [C, tile_height, tile_width]
+        flatten_ids: The global flatten indices in [C * N] from  `isect_tiles()`. [n_isects]
+
+    Returns:
+        A tuple:
+
+        - **Gaussian ids**. Gaussian ids for the pixel intersection. A flattened list of shape [M].
+        - **Pixel ids**. pixel indices (row-major). A flattened list of shape [M].
+        - **Camera ids**. Camera indices. A flattened list of shape [M].
+    """
+
+    C, N, _ = means2d.shape
+    assert conics.shape == (C, N, 3), conics.shape
+    assert opacities.shape == (C, N), opacities.shape
+    assert isect_offsets.shape[0] == C, isect_offsets.shape
+
+    tile_height, tile_width = isect_offsets.shape[1:3]
+    assert (
+        tile_height * tile_size >= image_height
+    ), f"Assert Failed: {tile_height} * {tile_size} >= {image_height}"
+    assert (
+        tile_width * tile_size >= image_width
+    ), f"Assert Failed: {tile_width} * {tile_size} >= {image_width}"
+
+    out_gauss_ids, out_indices = _make_lazy_cuda_func("rasterize_to_indices_in_range_radargs")(
+        range_start,
+        range_end,
+        transmittances.contiguous(),
+        means2d.contiguous(),
+        conics.contiguous(),
+        opacities.contiguous(),
+        image_width,
+        image_height,
+        tile_size,
+        isect_offsets.contiguous(),
+        flatten_ids.contiguous(),
+    )
+    out_pixel_ids = out_indices % (image_width * image_height)
+    out_camera_ids = out_indices // (image_width * image_height)
+    return out_gauss_ids, out_pixel_ids, out_camera_ids

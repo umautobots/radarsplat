@@ -19,6 +19,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         &gsplat::quat_scale_to_covar_preci_bwd_tensor
     );
 
+    m.def(
+        "cartesian_to_spherical_fwd",
+        &gsplat::cartesian_to_spherical_fwd_tensor
+    );
+    m.def(
+        "cartesian_to_spherical_bwd",
+        &gsplat::cartesian_to_spherical_bwd_tensor
+    );
+
     m.def("proj_fwd", &gsplat::proj_fwd_tensor);
     m.def("proj_bwd", &gsplat::proj_bwd_tensor);
 
@@ -86,6 +95,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def(
         "rasterize_to_indices_in_range_2dgs",
         &gsplat::rasterize_to_indices_in_range_2dgs_tensor
+    );
+
+    m.def(
+        "rasterize_to_indices_in_range_radargs",
+        &gsplat::rasterize_to_indices_in_range_radargs_tensor
     );
 
     m.def("selective_adam_update", &gsplat::selective_adam_update);
