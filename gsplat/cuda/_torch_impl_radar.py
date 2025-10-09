@@ -85,7 +85,7 @@ def accumulate(
     indices = camera_ids * image_height * image_width + pixel_ids
     total_pixels = C * image_height * image_width
 
-    # TODO: Update this once we have radar antenna profile. Assign different weight according to abs(depth)
+    # TODO: Update this with radar antenna profile.
     # alphas_w_reflectance, counts_w_reflectance = sum_weights(
     #     alphas_w_reflectance, indices, total_pixels
     # )

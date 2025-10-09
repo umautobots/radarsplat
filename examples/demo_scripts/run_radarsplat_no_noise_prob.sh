@@ -75,8 +75,9 @@ fi
 # Move back to project root
 cd "$HOME/gsplat"
 
-# Run training
+# Run training # Config used to report number in the paper
 run_training() {
+  local OPA_NOISE_REG_LOSS_LAMBDA="${1:-${OPA_NOISE_REG_LOSS_LAMBDA:-1e3}}"
   python examples/radar_simple_trainer.py default \
       --eval_set val+all \
       --save_fig \
@@ -99,7 +100,7 @@ run_training() {
       --init_opa 0.5 \
       --init_scale "$INIT_SCALE" \
       --max_steps 2000 \
-      --opa_noise_reg_loss_lambda 1e3 \
+      --opa_noise_reg_loss_lambda "$OPA_NOISE_REG_LOSS_LAMBDA" \
       --l1occloss_lambda 10 \
       --maxsize_lambda 100 \
       --sh_degree_interval 200 \
@@ -117,11 +118,11 @@ run_training() {
       $CKPT_ARG
 }
 
-MAX_RETRIES=5
+MAX_RETRIES=3
 RETRY_COUNT=0
 
 while true; do
-    LOG_FILE="log_attempt_${RETRY_COUNT}.txt"
+    LOG_FILE="tmp_log/log_attempt_${RETRY_COUNT}.txt"
     echo "[INFO] Running training attempt #$((RETRY_COUNT + 1))"
     
     # Run training and stream output directly to a file
@@ -132,12 +133,18 @@ while true; do
         echo "[WARNING] '[Nan in loss]' detected. Retrying after 5s..."
         ((RETRY_COUNT++))
         if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; then
-            echo "[ERROR] Exceeded maximum retries ($MAX_RETRIES). Exiting."
+            echo "Exceeded maximum retries ($MAX_RETRIES). Try to run code with low regularization weight."
+            
+            ((RETRY_COUNT++))
+            LOG_FILE="tmp_log/log_attempt_${RETRY_COUNT}.txt"
+            # Run training with low reg weight
+            run_training 1e1 2>&1 | tee "$LOG_FILE"
+
             break
         fi
         sleep 5
     else
-        echo "[INFO] Training completed without '[Nan in loss]'. Exiting."
+        echo "[INFO] Training completed. Exiting..."
         break
     fi
 done

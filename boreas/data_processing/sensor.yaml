@@ -1,0 +1,9 @@
+sensor_type: "scanning_radar"
+use_polar: True
+H: 400
+W: 3371
+W_metadata: 11
+range_resolution: 0.0596
+azimuth_resolution: 0.9
+azimuth_beamwidth: 1.8
+azimuth_coverage: 360

@@ -1,15 +1,137 @@
-# gsplat
+# RadarSplat
 
-[![Core Tests.](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml)
-[![Docs](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml)
+### RadarSplat: Radar Gaussian Splatting for High-Fidelity Data Synthesis and 3D Reconstruction of Autonomous Driving Scenes
 
-[http://www.gsplat.studio/](http://www.gsplat.studio/)
+Pou-Chun Kung, Skanda Harisha, Ram Vasudevan, Aline Eid, Katherine A. Skinner
 
-gsplat is an open-source library for CUDA accelerated rasterization of gaussians with python bindings. It is inspired by the SIGGRAPH paper [3D Gaussian Splatting for Real-Time Rendering of Radiance Fields](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), but we’ve made gsplat even faster, more memory efficient, and with a growing list of new features! 
+[[Paper](https://arxiv.org/pdf/2506.01379)] |
+[[Project Page](https://umautobots.github.io/radarsplat)]
 
-<div align="center">
-  <video src="https://github.com/nerfstudio-project/gsplat/assets/10151885/64c2e9ca-a9a6-4c7e-8d6f-47eeacd15159" width="100%" />
-</div>
+<p align="center">
+  <img src="assets/radarsplat_teaser.png" alt="RadarSplat Teaser" width="100%" />
+</p>
+
+<details>
+<summary> <b>Abstract (click to expand)</b> </summary>
+
+High-Fidelity 3D scene reconstruction plays a crucial role in autonomous driving by enabling novel data generation from existing datasets. This allows simulating safety-critical scenarios and augmenting training datasets without incurring further data collection costs. While recent advances in radiance fields have demonstrated promising results in 3D reconstruction and sensor data synthesis using cameras and LiDAR, their potential for radar remains largely unexplored. Radar is crucial for autonomous driving due to its robustness in adverse weather conditions like rain, fog, and snow, where optical sensors often struggle. Although the state-of-the-art radar-based neural representation shows promise for 3D driving scene reconstruction, it performs poorly in scenarios with significant radar noise, including receiver saturation and multipath reflection. Moreover, it is limited to synthesizing preprocessed, noise-excluded radar images, failing to address realistic radar data synthesis. To address these limitations, this paper proposes RadarSplat, which integrates Gaussian Splatting with novel radar noise modeling to enable realistic radar data synthesis and enhanced 3D reconstruction. Compared to the state-of-the-art, RadarSplat achieves superior radar image synthesis (+3.4 PSNR / 2.6x SSIM) and improved geometric reconstruction (-40% RMSE / 1.5x Accuracy), demonstrating its effectiveness in generating high-fidelity radar data and scene reconstruction.
+
+</details>
+
+
+## Prepare Environment
+
+```bash
+conda ...
+```
+
+## Prepare Dataset
+Download data from [Boreas Dataset](https://www.boreas.utias.utoronto.ca/#/download).
+In the paper, we choose:
+
+| Sequence Name             | Weather/Condition |
+|-------------------------- |------------------|
+| boreas-2021-09-02-11-42   | Sunny            |
+| boreas-2021-01-26-11-22   | Snow             |
+| boreas-2021-04-29-15-55   | Rain             |
+| boreas-2021-09-14-20-00   | Night            |
+| boreas-2021-04-08-12-44   | Sunny 2          |
+
+
+If you want to test on other sequences, please make sure the selected sequences are not part of the [odom_test](https://github.com/utiasASRL/pyboreas/blob/eeb2b1bb302f5386eff7198858846f6d89675fda/pyboreas/data/splits.py#L42-L56) set, so that the ground truth poses are provided.
+
+
+## Data Preprocessing
+
+Install [pyboreas library](https://github.com/utiasASRL/pyboreas) for data preprocessing.
+```bash
+pip install asrl-pyboreas
+```
+
+Disable local CUDA in case it conflict with CUDA version in conda env
+```bash
+# Backup and remove from PATH
+export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/usr/local/cuda' | paste -sd ':' -)
+# Remove from LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH | tr ':' '\n' | grep -v '/usr/local/cuda' | paste -sd ':' -)
+# Unset CUDA_HOME if it points to system CUDA
+unset CUDA_HOME
+
+conda install -c nvidia cuda-nvcc=11.7
+conda install -c nvidia cuda-toolkit=11.7
+```
+
+Then install:
+```bash
+pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+
+cd examples
+pip install -r requirements.txt
+```
+
+Run the following Linux script to preprocess the data for a demo sequence. 
+Note that this process may take some time to complete.
+```bash
+DATA_ROOT=<YOUR_PATH_TO_DATA>
+cd radarsplat
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-09-02-11-42 0.0596 68 && \
+```
+
+I you want full experiment reported in paper, run:
+```bash
+DATA_ROOT=<YOUR_PATH_TO_DATA>
+cd radarsplat
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-09-02-11-42 0.0596 411 && \
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-01-26-11-22 0.0596 501 && \
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-04-29-15-55 0.0596 271 && \
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-09-14-20-00 0.0596 451 && \
+bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-04-08-12-44 0.0596 386
+```
+
+The following folders will be created under each boreas sequence folder:
+```bash
+├── sensor.yaml
+├── multipath_model
+├── radar_average_map
+├── radar_average_map_polar
+├── radar_trajectory.tum
+├── synced_lidar
+└── synced_lidar_map_win5
+```
+
+## Run RadarSplat
+
+Run demo sequence experiments and ablation studies. 
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat.sh ./seq_demo.txt
+```
+
+Run full experiments and ablation studies in the paper. 
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat.sh ./seq_all.txt
+```
+
+## Evaluation
+Run demo sequence evaluation.
+```bash
+python eval_summary.py ./examples/demo_scripts/seq_demo.txt
+```
+
+Run full evaluation.
+```bash
+python eval_summary.py ./examples/demo_scripts/seq_all.txt
+```
+
+## Rendering/Visualization
+Render outputs from a trained model using all available frames (train + val) for evaluation and visualization.
+```bash
+python examples/radar_simple_trainer.py default --ckpt <CHECKPOINT_PATH> --eval_set all --save_fig --use_lidar_map
+```
+
+
+
 
 ## Installation
 

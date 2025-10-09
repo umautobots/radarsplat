@@ -6,7 +6,6 @@ import open3d as o3d
 import cv2
 import imageio
 from typing import Literal
-from radar.view3d import bev_image_view3d
 
 # This code is borrow from RadarFields github
 # https://github.com/princeton-computational-imaging/RadarFields/blob/ee76d76570f58b3d8539eafd7df0c188b58af333/utils/vis.py#L36
@@ -322,7 +321,7 @@ def visualize_signal_decomposition(out_img, out_occ, out_noise, multipath_bg, se
     
 
 
-def visualize_in_cart_space_separated(pixels, pixels_occ, out_img, out_occ, cart_render_occ, points, sensor_type, range_resolution, azimuth_resolution, max_range, viz_type=Literal["plt","rgb"], viz_3d=False, viz_lidar=False):
+def visualize_in_cart_space_separated(pixels, pixels_occ, out_img, out_occ, cart_render_occ, points, sensor_type, range_resolution, azimuth_resolution, max_range, viz_type=Literal["plt","rgb"], viz_lidar=False):
     pixels = pixels.squeeze()
     pixels_occ = pixels_occ.squeeze()
     out_img = out_img.squeeze()
@@ -426,12 +425,7 @@ def visualize_in_cart_space_separated(pixels, pixels_occ, out_img, out_occ, cart
         fig_lidar_fov=None
         fig_lidar_fov_visiable = None
 
-    if viz_3d:
-        out_occ_cart_zero_bg[out_occ_cart_zero_bg<0.4]=0
-        out_occ_cart_zero_bg_resized = cv2.resize(out_occ_cart_zero_bg, (250, 250), interpolation=cv2.INTER_AREA)
-        fig_view3d, ax_view3d = bev_image_view3d(out_occ_cart_zero_bg_resized)
-    else:
-        fig_view3d, ax_view3d = None, None
+    fig_view3d, ax_view3d = None, None
 
     pixels_cart = Image.fromarray((pixels_cart*255).astype(np.uint8))
     pixels_occ_cart = Image.fromarray((pixels_occ_cart*255).astype(np.uint8))

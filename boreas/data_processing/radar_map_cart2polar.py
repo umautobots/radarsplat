@@ -28,15 +28,12 @@ image_files = sorted(glob.glob(os.path.join(radar_map_path, "*")))
 radar_map_polar_path = radar_map_path.replace("radar_average_map","radar_average_map_polar")
 os.makedirs(radar_map_polar_path, exist_ok=True)
 
-for i, image_file in tqdm(enumerate(image_files)):
-    # if i < 380:
-    #     continue
+for i, image_file in enumerate(tqdm(image_files, desc="Converting to polar", unit="img")):
     radar_map_image = imageio.imread(image_file)
     radar_map_image_ = np.rot90(radar_map_image, k=3)
     radar_map_image_polar = cart_to_polar(radar_map_image_, num_bins_to_show=num_bins_to_show, bin_size=range_resolution, num_azims=num_azims,
                                                 resolution=radar_map_image_.shape[0], noise_floor=None, norm=False)
     radar_map_image_polar = radar_map_image_polar.astype(np.uint8)
-    # print(radar_map_image_polar.shape, radar_map_image_polar.dtype)
     polar_image_file = image_file.replace("radar_average_map","radar_average_map_polar")
-    print(polar_image_file)
+    # print(polar_image_file)
     imageio.imwrite(polar_image_file, radar_map_image_polar)

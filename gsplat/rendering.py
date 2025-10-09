@@ -1047,12 +1047,6 @@ def _radar_rasterization(
 
     # Convert first channel of color to reflectance 
     reflectance = torch.clamp_max(colors[:,:,0], 1.0) 
-
-    # Apply view dependency to opacities
-    # powers = opacities * reflectance
-    
-    # For debuging !!!!!!!!!!!!!!!!!!!!!
-    # check_thres(0.5, shs, opacities, means2d, conics, width, height, tile_size, isect_offsets, flatten_ids, batch_per_iter)
     
     # If in distributed mode, we need to scatter the GSs to the destination ranks, based
     # on which cameras they are visible to, which we already figured out in the projection
@@ -1374,15 +1368,6 @@ def spectral_leakage(raw_image, range_resolution, sinc_width=1.):
     kernel = torch.exp(-0.5 * (torch.arange(kernel_size) - kernel_size // 2)**2 / sigma**2).cuda()
     kernel = kernel / kernel.sum()
     kernel = kernel.view(1, 1, 1, -1)  # Shape: (out_channels, in_channels, kernel_H, kernel_W)
-    
-    # x = torch.arange(kernel_size) - kernel_size // 2
-    # plt.figure(figsize=(8, 4))
-    # plt.plot(x.numpy(), kernel.squeeze().numpy(), marker='o')
-    # plt.title(f'1D Gaussian Kernel (sigma={sigma})')
-    # plt.xlabel('Kernel Index')
-    # plt.ylabel('Weight')
-    # plt.grid(True)
-    # plt.show()
 
     # Reshape for conv2d: (batch_size=1, channels=1, height=azimuth_with_padding, width=range_size)
     raw_image_reshaped = raw_image.permute(2, 0, 1).unsqueeze(0)
@@ -1394,12 +1379,6 @@ def spectral_leakage(raw_image, range_resolution, sinc_width=1.):
 
     # Reshape the result back to the desired format: (new_azimuth_size, range_size, channels)
     output_image = output.squeeze().unsqueeze(-1)
-    
-    # saturate_mask = output_image>raw_image
-    # output_image[saturate_mask] = raw_image[saturate_mask]
-    
-    # saturate_mask = output_image>1
-    # output_image[saturate_mask] = 1
 
     return output_image
 

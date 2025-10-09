@@ -131,4 +131,7 @@ results
 out
 batch*
 wandb
+results
+paper_experiments_backup
+tmp_log/*
 # gsplat/shs_test

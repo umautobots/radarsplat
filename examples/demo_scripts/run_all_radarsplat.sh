@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
 
 # set -e
-
-RESULT_DIR="./batch_results_paper/"
+RESULT_DIR="./batch_results/"
 
 # Load experiments from seq_all.txt
-SEQUENCE_FILE="./seq_all.txt"
+SEQUENCE_FILE=$1 # "./seq_all.txt"
 
 # Shared settings
 INIT_NUM_PTS=20000
 INIT_SCALE=0.5
 SYNCED_LIDAR_MAP_NAME="synced_lidar_map_win5"
-# RADAR_AVG_MAP_NAME="radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21_smooth:30.0"
 RADAR_AVG_MAP_NAME="radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21_smooth:3.0"
 USE_WANDB=1  # Set to 0 if you want to disable wandb
 CKPT=""      # Set to checkpoint path if needed, else leave empty
-GPU=1
+GPU=0
 
 # Set default CUDA_VISIBLE_DEVICES if not already set
 if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
@@ -68,7 +66,7 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="bash $HOME/gsplat/examples/scripts/run_radarsplat.sh \
+  CMD="bash $HOME/gsplat/examples/demo_scripts/run_radarsplat.sh \
     --result_dir $RESULT_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \

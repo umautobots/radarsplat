@@ -202,7 +202,6 @@ class Config:
     dist_tolerance: float = 0.5
     eval_ego_shift: Optional[List[float]] = None
     
-    viz_3d: bool = False
     viz_lidar: bool = False
 
     save_fig: bool = False
@@ -259,22 +258,14 @@ def create_splats_with_optimizers(
         rgbs = torch.from_numpy(parser.points_rgb / 255.0).float()
     elif init_type == "random":
         points = init_extent * scene_scale/2. * (torch.rand((init_num_pts, 3)) * 2 - 1)
-        # points = init_extent * 50. * (torch.rand((init_num_pts, 3)) * 2 - 1) # fixed !!!!!
 
         points += scene_center.astype(np.float32)
         points[:,2] = 0 # only intialize on xy plane in the release version
         rgbs = torch.rand((init_num_pts, 3))
         
-        # # override point position
-        # points[:,0] = 0.0
-        # points[:,1] = 10.0
     else:
         raise ValueError("Please specify a correct init_type: predefined or random")
 
-    # Initialize the GS size to be the average dist of the 3 nearest neighbors
-    # dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)  # [N,]
-    # dist_avg = torch.sqrt(dist2_avg)
-    # scales = torch.log(dist_avg * init_scale).unsqueeze(-1).repeat(1, 3)  # [N, 3]
 
     # Override scale size
     scales = torch.ones_like(points) * cfg.init_scale #0.5
@@ -689,7 +680,7 @@ class Runner:
             )
 
             # Obtain reconstructed multipath signal
-            # TODO: lookup closest multipath_source from the list
+            ### Comment out for release code ###
             # multipath_sources_pose = radarposes.squeeze()
             # current_pose = radarposes.squeeze()
             # multipath_sources_pose = torch.eye(4)
@@ -700,7 +691,7 @@ class Runner:
 
             if self.parser.use_polar:
                 current_azi_id_list = data["multipath_sources"]['azi_id_list']
-                current_reconstructed_multipath = data["multipath_sources"]["reconstructed_signal"]
+                current_reconstructed_multipath = data["multipath_sources"]["reconstructed_signal"] # Load from reconstructed_signal for demo
                 multipath_bg = torch.zeros_like(pixels)
                 multipath_bg[:, current_azi_id_list] = current_reconstructed_multipath.to(device).float()
                 multipath_bg = multipath_bg.permute(1,2,0)
@@ -1033,9 +1024,7 @@ class Runner:
             # eval the full set
             if step in [i - 1 for i in cfg.eval_steps]:
                 self.eval(step, stage="val", save_fig=True, use_lidar_map=cfg.use_lidar_map)
-                # self.eval(step, stage="all", save_fig=True, use_lidar_map=cfg.use_lidar_map)
-
-                # self.render_traj(step)
+                # self.eval(step, stage="all", save_fig=True, use_lidar_map=cfg.use_lidar_map) # Uncomment this to enable full rendering after training 
 
             # run compression
             if cfg.compression is not None and step in [i - 1 for i in cfg.eval_steps]:
@@ -1198,8 +1187,6 @@ class Runner:
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/pred_FFT/", exist_ok=True)
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/pred_occupancy/", exist_ok=True)
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/pred_occupancy_cart/", exist_ok=True)
-                os.makedirs(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/", exist_ok=True)
-                os.makedirs(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/wo_sl", exist_ok=True)
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/LiDAR_BEV/", exist_ok=True)
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/LiDAR_FOV_BEV/", exist_ok=True)
                 os.makedirs(f"{self.render_dir}/{step}/{stage}/LiDAR_radar_vis/", exist_ok=True)
@@ -1258,11 +1245,11 @@ class Runner:
                 out_refl_color = visualize_signal_refl(out_refl, self.parser.sensor_type, range_resolution, self.parser.azimuth_resolution)
                 out_refl_color.save(f"{self.render_dir}/{step}/{stage}/reflectance/{stage}_step{step}_{i:04d}.png", compress_level=0)
 
-                out_refl_alpha_mask[out_occ<0.5]=0 # occ filter !!!!!!!!
+                out_refl_alpha_mask[out_occ<0.5]=0 # occ filter
                 out_refl_color = visualize_signal_refl(out_refl_alpha_mask, self.parser.sensor_type, range_resolution, self.parser.azimuth_resolution)
                 out_refl_color.save(f"{self.render_dir}/{step}/{stage}/reflectance_alpha/{stage}_step{step}_{i:04d}.png", compress_level=0)
 
-                out_refl_eta_mask[out_noise<0.5]=0 # noise filter !!!!!!!!
+                out_refl_eta_mask[out_noise<0.5]=0 # noise filter
                 out_refl_color = visualize_signal_refl(out_refl_eta_mask, self.parser.sensor_type, range_resolution, self.parser.azimuth_resolution)
                 out_refl_color.save(f"{self.render_dir}/{step}/{stage}/reflectance_eta/{stage}_step{step}_{i:04d}.png", compress_level=0)
 
@@ -1278,19 +1265,7 @@ class Runner:
                                                         azimuth_resolution = self.parser.azimuth_resolution,
                                                         max_range = self.parser.max_range,
                                                         viz_type='rgb',
-                                                        viz_3d=self.cfg.viz_3d,
                                                         viz_lidar=self.cfg.viz_lidar)
-                if self.cfg.viz_3d:
-                    ax_view3d.view_init(elev=45, azim=0) # azim=-90 (back to front view)
-                    ax_view3d.dist = 8
-                    fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/{stage}_step{step}_{i:04d}.png", format="png", dpi=150, bbox_inches="tight")
-                    ax_view3d.view_init(elev=45, azim=0) # azim=-90 (back to front view)
-                    ax_view3d.dist = 4
-                    fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/{stage}_step{step}_{i:04d}_zoomin.png", format="png", dpi=150, bbox_inches="tight")
-                    ax_view3d.view_init(elev=35, azim=-90) # azim=-90 (back to front view)
-                    ax_view3d.dist = 8
-                    fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/{stage}_step{step}_{i:04d}_front.png", format="png", dpi=150, bbox_inches="tight")
-                    plt.close(fig_view3d)
                                 
                 pixels_cart.save(f"{self.render_dir}/{step}/{stage}/FFT/{stage}_step{step}_{i:04d}.png", compress_level=0)
                 pixels_occ_cart.save(f"{self.render_dir}/{step}/{stage}/OCC/{stage}_step{step}_{i:04d}.png", compress_level=0)
@@ -1306,24 +1281,6 @@ class Runner:
                     plt.close(fig_lidar_fov)
                     plt.close(fig_lidar_fov_visiable)
 
-                if self.cfg.spectral_leakage and self.cfg.viz_3d:
-                    pixels_cart, pixels_occ_cart, out_img_cart, out_occ_cart_, cart_render_occ, fig_lidar, fig_lidar_fov, fig_lidar_fov_visiable, fig_view3d, ax_view3d = visualize_in_cart_space_separated(pixels, pixels_occ, out_img, out_occ_wo_spectral_leakage, out_occ_cart, lidar_points,
-                                                        sensor_type = self.parser.sensor_type, 
-                                                        range_resolution = self.parser.range_resolution, 
-                                                        azimuth_resolution = self.parser.azimuth_resolution,
-                                                        max_range = self.parser.max_range,
-                                                        viz_type='rgb',
-                                                        viz_3d=self.cfg.viz_3d)
-                    if self.cfg.viz_3d:
-                        ax_view3d.view_init(elev=45, azim=0) # azim=-90 (back to front view)
-                        ax_view3d.dist = 8
-                        fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/wo_sl/{stage}_step{step}_{i:04d}.png", format="png", dpi=150, bbox_inches="tight")
-                        ax_view3d.view_init(elev=45, azim=0) # azim=-90 (back to front view)
-                        ax_view3d.dist = 4
-                        fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/wo_sl/{stage}_step{step}_{i:04d}_zoomin.png", format="png", dpi=150, bbox_inches="tight")
-                        ax_view3d.view_init(elev=35, azim=-90) # azim=-90 (back to front view)
-                        ax_view3d.dist = 8
-                        fig_view3d.savefig(f"{self.render_dir}/{step}/{stage}/pred_occupancy_3D/wo_sl/{stage}_step{step}_{i:04d}_front.png", format="png", dpi=150, bbox_inches="tight")
 
             if world_rank == 0:
                 # pixels_p = pixels.permute(0, 3, 1, 2)  # [1, 3, H, W]
@@ -1439,110 +1396,6 @@ class Runner:
                 self.writer.flush()
 
     @torch.no_grad()
-    def render_traj(self, step: int):
-        """Entry for trajectory rendering."""
-        print("Running trajectory rendering...")
-        cfg = self.cfg
-        device = self.device
-
-        camtoworlds_all = self.parser.radarposes[5:-5]
-        if cfg.render_traj_path == "interp":
-            camtoworlds_all = generate_interpolated_path(
-                camtoworlds_all, 1
-            )  # [N, 3, 4]
-        elif cfg.render_traj_path == "ellipse":
-            height = camtoworlds_all[:, 2, 3].mean()
-            camtoworlds_all = generate_ellipse_path_z(
-                camtoworlds_all, height=height
-            )  # [N, 3, 4]
-        elif cfg.render_traj_path == "spiral":
-            camtoworlds_all = generate_spiral_path(
-                camtoworlds_all,
-                bounds=self.parser.bounds * self.scene_scale,
-                spiral_scale_r=self.parser.extconf["spiral_radius_scale"],
-            )
-        else:
-            raise ValueError(
-                f"Render trajectory type not supported: {cfg.render_traj_path}"
-            )
-
-        camtoworlds_all = np.concatenate(
-            [
-                camtoworlds_all,
-                np.repeat(
-                    np.array([[[0.0, 0.0, 0.0, 1.0]]]), len(camtoworlds_all), axis=0
-                ),
-            ],
-            axis=1,
-        )  # [N, 4, 4]
-
-        camtoworlds_all = torch.from_numpy(camtoworlds_all).float().to(device)
-        K = torch.from_numpy(list(self.parser.Ks_dict.values())[0]).float().to(device)
-        width, height = list(self.parser.imsize_dict.values())[0]
-
-        # save to video
-        video_dir = f"{cfg.result_dir}/videos"
-        os.makedirs(video_dir, exist_ok=True)
-        writer = imageio.get_writer(f"{video_dir}/traj_{step}.mp4", fps=30)
-        for i in tqdm.trange(len(camtoworlds_all), desc="Rendering trajectory"):
-            camtoworlds = camtoworlds_all[i : i + 1]
-            Ks = K[None]
-                        
-            # forward
-            renders, renders_occupancy, renders_noise_probs, render_opa_refl, render_noise_refl, info = self.rasterize_splats(
-                radarposes=camtoworlds,
-                Ks=Ks,
-                width=width,
-                height=height,
-                sh_degree=cfg.sh_degree, # TODO: keep this for future use
-                near_plane=cfg.near_plane, # TODO: check if this is needed
-                far_plane=cfg.far_plane, # TODO: check if this is needed
-                # image_ids=image_ids,
-                # masks=masks,
-                use_polar=self.parser.use_polar,
-            )
-            out_img = renders[0]
-            out_occ = renders_occupancy[0]
-            
-            if self.cfg.spectral_leakage:
-                out_img = spectral_leakage(out_img, self.parser.range_resolution, sinc_width=self.cfg.sinc_width)
-                out_occ = spectral_leakage(out_occ, self.parser.range_resolution, sinc_width=self.cfg.sinc_width)
-            if self.parser.use_polar:
-                out_img = azimuth_antenna_gain_projection(out_img, new_resolution=self.parser.azimuth_resolution, beamwidth=self.parser.azimuth_beamwidth)
-                out_occ = azimuth_antenna_gain_projection(out_occ, new_resolution=self.parser.azimuth_resolution, beamwidth=self.parser.azimuth_beamwidth)
-
-            # canvas_list = [out_img]
-            out_img = out_img.squeeze()
-            num_bins_to_show = out_img.shape[1]
-            bin_size = self.parser.range_resolution
-            num_azims = int(360/self.parser.azimuth_resolution)
-            out_img_cart = polar_to_cart(out_img.detach().cpu().numpy(), num_bins_to_show, bin_size, num_azims,
-                            resolution=1000, noise_floor=None, norm=False)
-            canvas_list = [torch.tensor(out_img_cart).unsqueeze(-1).to(out_img.device)]
-
-            # renders, _, _ = self.rasterize_splats(
-            #     camtoworlds=camtoworlds,
-            #     Ks=Ks,
-            #     width=width,
-            #     height=height,
-            #     sh_degree=cfg.sh_degree,
-            #     near_plane=cfg.near_plane,
-            #     far_plane=cfg.far_plane,
-            #     # render_mode="RGB+ED",
-            # )  # [1, H, W, 4]
-            # colors = torch.clamp(renders[..., 0:3], 0.0, 1.0)  # [1, H, W, 3]
-            # depths = renders[..., 3:4]  # [1, H, W, 1]
-            # depths = (depths - depths.min()) / (depths.max() - depths.min())
-            # canvas_list = [colors, depths.repeat(1, 1, 1, 3)]
-
-            # write images
-            canvas = torch.cat(canvas_list, dim=2).squeeze(0).cpu().numpy()
-            canvas = (canvas * 255).astype(np.uint8)
-            writer.append_data(canvas)
-        writer.close()
-        print(f"Video saved to {video_dir}/traj_{step}.mp4")
-
-    @torch.no_grad()
     def run_compression(self, step: int):
         """Entry for running compression."""
         print("Running compression...")
@@ -1613,8 +1466,6 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config):
             loaded_config = pickle.load(f)
             runner.cfg = loaded_config
             runner.cfg.ckpt = cfg.ckpt
-            runner.cfg.viz_3d = cfg.viz_3d
-            runner.cfg.ckpt = cfg.ckpt
                 
         step = ckpts[0]["step"]
         
@@ -1629,9 +1480,7 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config):
         # use_lidar_map = True
         # runner.eval(step=step, stage='val', save_fig=False, use_lidar_map=use_lidar_map)
         # runner.eval(step=step, stage='all', save_fig=False, use_lidar_map=use_lidar_map)
-        
-        # runner.render_traj(step=step)
-        
+                
         if cfg.compression is not None:
             runner.run_compression(step=step)
     else:
