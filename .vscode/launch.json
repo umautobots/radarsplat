@@ -66,7 +66,7 @@
             }
         },
         {
-            "name": "Trainer",
+            "name": "Color Trainer",
             "type": "debugpy",
             "request": "launch",
             "program": "examples/simple_trainer.py",
@@ -81,6 +81,15 @@
                 "CUDA_LAUNCH_BLOCKING": "1",
                 "TORCH_USE_CUDA_DSA": "1",
             }
+        },
+        {
+            "name": "Radar Map cart2polar",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "radar/dataset/radar_map_cart2polar.py",
+            "console": "integratedTerminal",
+            "args": [
+            ],
         },
         {
             "name": "RadarTrainer",
@@ -102,10 +111,178 @@
 
                 "--max_range", "50",
 
-                "--data_dir", "data/boreas_test/",
+                "--data_dir", "/mnt/ws-frb/projects/radar_splat/data/wave_gs/boreas_test/",
                 "--data_factor", "1",
                 "--result_dir", "./results/radar_test",
 
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+                "CUDA_VISIBLE_DEVICES": "1" // single GPU
+            }
+        },
+        {
+            "name": "MultiFramesRadarTrainer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_simple_trainer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "default",
+                // "mcmc", // not being helpful
+
+                // Wandb
+                "--no-use-wandb",
+                // "--wandb_img_every", "100",
+                
+                // Load ckpt for testing mode
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250223_223653/ckpts/ckpt_1999_rank0.pt", // seq1
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_330_370_20250224_212036/ckpts/ckpt_1999_rank0.pt", // seq2
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_370_410_20250224_221100/ckpts/ckpt_1999_rank0.pt", // seq3
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_472_512_20250224_223243/ckpts/ckpt_1999_rank0.pt", // seq4
+
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_330_370_20250225_003118/ckpts/ckpt_1999_rank0.pt", // seq2 radar_thres0.1
+
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_39_40_20250226_010140/ckpts/ckpt_999_rank0.pt", // paper demo 
+                
+                //  NEW radar_map_thres: 0.15
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250303_030810/ckpts/ckpt_1999_rank0.pt", // seq1
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_330_370_20250303_031703/ckpts/ckpt_1999_rank0.pt", // seq2 // paper decomp figure (id=3)
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_370_410_20250303_022338/ckpts/ckpt_1999_rank0.pt", // seq3
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_472_512_20250303_022421/ckpts/ckpt_1999_rank0.pt", // seq4
+                
+                //  NEW radar_map_thres: 0.1 use_lidar_map
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250304_162023/ckpts/ckpt_1999_rank0.pt", // seq1
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_330_370_20250304_163211/ckpts/ckpt_1999_rank0.pt", // seq2
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_370_410_20250304_163314/ckpts/ckpt_1999_rank0.pt", // seq3
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_472_512_20250304_163415/ckpts/ckpt_1999_rank0.pt", // seq4
+
+                //// Ablations
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250304_182830/ckpts/ckpt_1999_rank0.pt", // w/o MP // paper figure (id=7)
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250304_183322/ckpts/ckpt_1999_rank0.pt", // w/o NP
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250304_183711/ckpts/ckpt_1999_rank0.pt", // w/o SL
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_27_67_20250304_185442/ckpts/ckpt_1999_rank0.pt", // w/o our Occ
+
+                // "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/frame_472_512_20250509_201618/ckpts/ckpt_1999_rank0.pt",
+                
+                // batch_results
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-01-26-11-22/boreas-2021-01-26-11-22_frame_217_257_20250511_052618/ckpts/ckpt_1999_rank0.pt",
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-01-26-11-22/boreas-2021-01-26-11-22_frame_460_500_20250511_204947/ckpts/ckpt_1999_rank0.pt",
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-04-29-15-55/boreas-2021-04-29-15-55_frame_190_230_20250511_205954/ckpts/ckpt_1999_rank0.pt",
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-04-29-15-55/boreas-2021-04-29-15-55_frame_230_270_20250512_002155/ckpts/ckpt_1999_rank0.pt",
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-09-14-20-00/boreas-2021-09-14-20-00_frame_80_120_20250511_210949/ckpts/ckpt_1999_rank0.pt",
+                // "--ckpt", "/home/pckung/gsplat/batch_results/boreas-2021-09-14-20-00/boreas-2021-09-14-20-00_frame_410_450_20250512_001103/ckpts/ckpt_1999_rank0.pt",
+
+                "--result_dir", "./results/",
+                // "--result_dir", "./batch_results/",
+
+                                // -----------------------------------------------------
+                "--seq_name", "boreas-2021-09-02-11-42", // Sunny
+                // "--frame_selection", "27", "67", // seq1
+                "--frame_selection", "330", "370", // seq2
+                // "--frame_selection", "370", "410", // seq3
+                // "--frame_selection", "472", "512", // seq4
+                // "--frame_selection", "330", "340", // seq2-sub
+                // "--frame_selection", "39", "40", // paper demo
+                // "--frame_selection", "501", "502",
+                // -----------------------------------------------------
+                // "--seq_name", "boreas-2021-01-26-11-22", // Snow
+                // "--frame_selection", "217", "257",
+                // "--frame_selection", "460", "500",
+                // -----------------------------------------------------
+                // "--seq_name", "boreas-2021-04-29-15-55", // Rain
+                // "--frame_selection", "190", "230",
+                // "--frame_selection", "230", "270",
+                // -----------------------------------------------------
+                // "--seq_name", "boreas-2021-09-14-20-00", // Night
+                // "--frame_selection", "80", "120",
+                // "--frame_selection", "410", "450",
+                // -----------------------------------------------------
+                // "--seq_name", "boreas-2021-10-15-12-35", // Cloud
+                // "--frame_selection", "55", "95",
+                // "--frame_selection", "365", "405",
+
+                // Eval
+                // "--eval_ego_shift", "0", "3",
+                // "--viz_3d",
+                "--eval_set", "all", // "val", "all", "val+all"
+                "--save_fig",
+                "--use_lidar_map",
+
+                // Input
+                "--no-preprocess_thres",
+                "--data_dir", "/mnt/ws-frb/projects/radar_splat/data/wave_gs/",
+                "--data_factor", "1",
+
+                "--synced_lidar_map_name", "synced_lidar_map_win5",
+
+                "--radar_average_map_name", "radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21_smooth:3.0",
+                // "--radar_average_map_name", "radar_average_map_polar/res:0.04381_dist:50_win_size:5_CR_thres:0.21_smooth:3.0",
+                // "radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21", 
+                // "radar_average_map_polar/baseline_polar_occ_filtered_polar/res:0.0596_dist:50_win_size:0"
+                
+                "--test-every", "5",
+                "--radar_map_thres", "0.10", // "0.15"
+
+                // Algo configs
+                "--multipath_weight", "0.6", //"0.6"
+                // "--no-spectral-leakage",
+                "--spectral-leakage",
+                "--sinc_width", "2",
+                // "--no-use_noise_probs",
+                // "--no-use_polar",
+
+                // Radar
+                "--max_range", "50",
+
+                // Init
+                "--init_num_pts", "20000", // "20000",
+                "--init_opa", "0.5",
+                "--init_scale",  "0.5",
+
+                // Training
+                "--max_steps", "2000",
+                // "--ssim_lambda", "0"
+                // "--pause_geo_opt_after", "2500",
+                "--opa_noise_reg_loss_lambda", "1e3",
+                "--l1occloss_lambda", "10",
+                "--maxsize_lambda", "100",
+
+                // SHS
+                "--sh_degree_interval", "200",
+                "--sh_degree", "5",
+                
+                // For default
+                "--strategy.refine_start_iter", "500",
+                "--strategy.refine-stop-iter", "0", // "1500",
+                "--strategy.reset_every", "100000", // reset is not working for noise_probs
+                "--strategy.prune-opa", "0.0",
+                "--strategy.refine-every", "250",
+                // For mcmc
+                // "--strategy.refine-start-iter", "100",
+                // "--strategy.refine-every", "100",
+                // "--strategy.min-opacity", "0.005",
+
+                // Log
+                "--save-steps", "1000", "2000",
+                "--eval_steps", "2000",
+                "--disable_viewer",
+            ],
+            "env": {
+                "CUDA_LAUNCH_BLOCKING": "1",
+                "TORCH_USE_CUDA_DSA": "1",
+                "CUDA_VISIBLE_DEVICES": "1" // single GPU
+            }
+        },
+        {
+            "name": "RadarViewer", // TODO
+            "type": "debugpy",
+            "request": "launch",
+            "program": "examples/radar_simple_viewer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--ckpt", "/home/pckung/gsplat/results/boreas-2021-09-02-11-42/experiment_20250212_145347/ckpts/ckpt_2499_rank0.pt",
             ],
             "env": {
                 "CUDA_LAUNCH_BLOCKING": "1",

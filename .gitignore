@@ -129,4 +129,6 @@ results
 
 # Frank
 out
+batch*
+wandb
 # gsplat/shs_test

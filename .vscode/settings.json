@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/pckung/gsplat/gsplat/cuda/csrc/third_party/glm/test/ext"
+    "cmake.sourceDirectory": "/home/pckung/gsplat/gsplat/cuda/csrc/third_party/glm/test/ext",
+    "git.ignoreLimitWarning": true
 }

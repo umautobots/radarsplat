@@ -9,7 +9,9 @@ from gsplat.utils import upper_triangular_to_matrices, matrices_to_upper_triangu
 def accumulate(
     means2d: Tensor,  # [C, N, 2]
     conics: Tensor,  # [C, N, 3]
+    # opacities_w_reflectance: Tensor,  # [C, N]
     opacities: Tensor,  # [C, N]
+    # noise_probs: Tensor,  # [C, N]
     gaussian_ids: Tensor,  # [M]
     pixel_ids: Tensor,  # [M]
     camera_ids: Tensor,  # [M]
@@ -70,21 +72,36 @@ def accumulate(
         0.5 * (c[:, 0] * deltas[:, 0] ** 2 + c[:, 2] * deltas[:, 1] ** 2)
         + c[:, 1] * deltas[:, 0] * deltas[:, 1]
     )  # [M]
+    # alphas_w_reflectance = torch.clamp_max(
+    #     opacities_w_reflectance[camera_ids, gaussian_ids] * torch.exp(-sigmas), 0.999
+    # )
     alphas = torch.clamp_max(
         opacities[camera_ids, gaussian_ids] * torch.exp(-sigmas), 0.999
     )
+    # alphas_noise_probs = torch.clamp_max(
+    #     noise_probs[camera_ids, gaussian_ids] * torch.exp(-sigmas), 0.999
+    # )
 
     indices = camera_ids * image_height * image_width + pixel_ids
     total_pixels = C * image_height * image_width
 
     # TODO: Update this once we have radar antenna profile. Assign different weight according to abs(depth)
-    weights = alphas
+    # alphas_w_reflectance, counts_w_reflectance = sum_weights(
+    #     alphas_w_reflectance, indices, total_pixels
+    # )
     alphas, counts = sum_weights(
-        weights, indices, total_pixels
+        alphas, indices, total_pixels
     )
+    # alphas_noise_probs, counts = sum_weights(
+    #     alphas_noise_probs, indices, total_pixels
+    # )
+
+    # alphas_w_reflectance = alphas_w_reflectance.reshape(C, image_height, image_width, 1)
     alphas = alphas.reshape(C, image_height, image_width, 1)
+    # alphas_noise_probs = alphas_noise_probs.reshape(C, image_height, image_width, 1)
     counts = counts.reshape(C, image_height, image_width, 1)
-    return alphas, counts
+
+    return alphas #alphas_w_reflectance, alphas, alphas_noise_probs #, counts
 
     # weights, trans = render_weight_from_alpha(
     #     alphas, ray_indices=indices, n_rays=total_pixels
@@ -118,7 +135,7 @@ def sum_weights(weights: torch.Tensor, indices: torch.Tensor, total_pixels: int)
     """
     # Initialize an output tensor for summing weights
     summed_weights = torch.zeros(total_pixels, device=weights.device, dtype=weights.dtype)
-    
+
     # Initialize a tensor to count occurrences for each index
     counts = torch.zeros(total_pixels, device=weights.device, dtype=weights.dtype)
 
@@ -126,8 +143,8 @@ def sum_weights(weights: torch.Tensor, indices: torch.Tensor, total_pixels: int)
     summed_weights.index_add_(0, indices, weights)
     counts.index_add_(0, indices, torch.ones_like(weights))
 
-    # Avoid division by zero by replacing zero counts with 1 (no contribution to average)
-    counts = torch.where(counts == 0, torch.ones_like(counts), counts)
+    # # Avoid division by zero by replacing zero counts with 1 (no contribution to average)
+    # counts = torch.where(counts == 0, torch.ones_like(counts), counts)
 
     # Compute the average weights
     # averaged_weights = summed_weights / counts
@@ -138,6 +155,8 @@ def _rasterize_to_radar_pixels(
     means2d: Tensor,  # [C, N, 2]
     conics: Tensor,  # [C, N, 3]
     opacities: Tensor,  # [C, N]
+    # noise_probs: Tensor,  # [C, N]
+    # reflectance: Tensor,  # [C, N]
     image_width: int,
     image_height: int,
     tile_size: int,
@@ -169,11 +188,16 @@ def _rasterize_to_radar_pixels(
     """
     from ._wrapper import rasterize_to_indices_in_range_radargs
 
+    # Combined occuapncy and reflectance
+    # opacities_w_reflectance = torch.clamp(opacities + noise_probs, min=1e-6, max=1) * reflectance
+
     C, N = means2d.shape[:2]
     n_isects = len(flatten_ids)
     device = means2d.device
 
-    render_alphas = torch.zeros((C, image_height, image_width, 1), device=device)
+    # render_powers = torch.zeros((C, image_height, image_width, 1), device=device)
+    render_occupancy = torch.zeros((C, image_height, image_width, 1), device=device)
+    # render_noise_probs = torch.zeros((C, image_height, image_width, 1), device=device)
 
     # Split Gaussians into batches and iteratively accumulate the renderings
     block_size = tile_size * tile_size
@@ -183,11 +207,14 @@ def _rasterize_to_radar_pixels(
     max_range = (isect_offsets_fl[1:] - isect_offsets_fl[:-1]).max().item()
     num_batches = (max_range + block_size - 1) // block_size
     for step in range(0, num_batches, batch_per_iter):
-
+        
+        # summed_weights_w_reflectance = torch.zeros((C, image_height, image_width, 1), device=device)
         summed_weights = torch.zeros((C, image_height, image_width, 1), device=device)
-        counts = torch.zeros((C, image_height, image_width, 1), device=device)
+        # summed_noise_weights = torch.zeros((C, image_height, image_width, 1), device=device)
+        # counts = torch.zeros((C, image_height, image_width, 1), device=device)
 
         # transmittances = 1.0 - render_alphas[..., 0]
+        
         transmittances = torch.ones((C, image_height, image_width, 1), device=device) # transmittances is not used in rasterize_to_indices_in_range_radargs
         # TODO: check why this transmittances has to be ones instead of zeros.
         
@@ -199,6 +226,7 @@ def _rasterize_to_radar_pixels(
             transmittances,
             means2d,
             conics,
+            # opacities_w_reflectance, 
             opacities,
             image_width,
             image_height,
@@ -210,23 +238,30 @@ def _rasterize_to_radar_pixels(
             break
 
         # Accumulate the renderings within this batch of Gaussians.
-        summed_weights_step, counts_step = accumulate(
+        # summed_weights_w_reflectance_step, summed_weights_step, summed_noise_weights_step = 
+        summed_weights_step = accumulate(
             means2d,
             conics,
+            # opacities_w_reflectance,
             opacities,
+            # noise_probs,
             gs_ids,
             pixel_ids,
             camera_ids,
             image_width,
             image_height,
         )
-        
+        # summed_weights_w_reflectance = summed_weights_w_reflectance + summed_weights_w_reflectance_step
         summed_weights = summed_weights + summed_weights_step
-        counts = counts + counts_step
+        # summed_noise_weights = summed_noise_weights + summed_noise_weights_step
 
-    render_alphas = summed_weights #/ counts
+        # counts = counts + counts_step
 
-    return render_alphas
+    # render_powers = summed_weights_w_reflectance #/ counts
+    render_occupancy = summed_weights #/ counts
+    # render_noise_probs = summed_noise_weights #/ counts
+
+    return render_occupancy #render_powers, render_occupancy, render_noise_probs
 
 
 class _cartesian_to_spherical_fixed_bwd(torch.nn.Module):

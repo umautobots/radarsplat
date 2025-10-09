@@ -10,8 +10,14 @@ import torch
 from pycolmap import SceneManager
 from scipy.spatial.transform import Rotation as R
 
+from typing import Literal
 from PIL import Image
 import yaml
+import open3d as o3d
+
+import matplotlib.pyplot as plt
+import matplotlib
+# matplotlib.use("TkAgg")  # For local GUI environments
 
 # from .normalize import (
 #     align_principle_axes,
@@ -46,7 +52,9 @@ def load_images_from_folder(folder_path):
     """Load all images from a folder and return a list of PIL.Image objects."""
     images = []
     image_names = []
-    for filename in os.listdir(folder_path):
+    filenames = os.listdir(folder_path)
+    filenames.sort()
+    for filename in filenames:
         if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
             image_path = os.path.join(folder_path, filename)
             try:
@@ -57,29 +65,65 @@ def load_images_from_folder(folder_path):
                 print(f"Error loading {filename}: {e}")
     return images, image_names
 
+def load_multipath_from_folder(multipath_dir):
+    """Load all multipath data from a folder and return a list of Dicts."""
+    multipath_data = []
+    filenames = os.listdir(multipath_dir)
+    filenames.sort()
+    for filename in filenames:
+        if filename.lower().endswith(('.npy')):
+            multipath_path = os.path.join(multipath_dir, filename)
+            try:
+                multipath = np.load(multipath_path, allow_pickle=True)
+                multipath_data.append(multipath)
+            except Exception as e:
+                print(f"Error loading {filename}: {e}")
+    return multipath_data
+
+def compute_spherical_grid_noise_threshold(fft_img, min_range, max_range):
+    '''
+    ## Dynamically threshold all range-azimuth bins with a grid\
+    of range-wise and azimuth-wise medians
+    '''
+    fft = fft_img.clone()
+
+    # Compute per-bin threshold grid
+    medians_range, _ = torch.median(fft[:, min_range:max_range+1], axis=1) # [400]
+    medians_azimuth, _ = torch.median(fft,axis=0)
+    grid = torch.maximum(medians_azimuth.unsqueeze(0), medians_range.unsqueeze(1))
+    has_signal = fft > 1.5*grid # [400, 7536]
+
+    return fft * has_signal
+        
 class WaveSensorDataParser:
     """Wave-based sensor data parser."""
 
     def __init__(
         self,
         data_dir: str,
+        synced_lidar_map_name: str,
+        radar_average_map_name: str,
         factor: int = 1, # not used
         normalize: bool = False, # not used
         test_every: int = 8,
         intermediate_azimuth_resolution: float = 0.1, # Only used when using scanning radar & use_polar=True
         max_range: float = None, # Only used when using scanning radar & use_polar=True
+        frame_selection: Optional[List[int]] = None # Select frames for training
     ):
         self.data_dir = data_dir
         self.factor = factor
         self.normalize = normalize
         self.test_every = test_every
+                
+        self.synced_lidar_map_name = synced_lidar_map_name
+        self.radar_average_map_name = radar_average_map_name
 
         assert os.path.exists(
             data_dir
         ), f"Data directory {data_dir} does not exist."
 
         # Load poses data from the .tum file
-        poses_file = os.path.join(data_dir, "traj.tum")
+        poses_file = os.path.join(data_dir, "radar_trajectory.tum")
         assert os.path.exists(poses_file), f"Poses file {poses_file} does not exist."
         poses = load_tum_poses(poses_file) # (num_images, 4, 4)
 
@@ -91,6 +135,7 @@ class WaveSensorDataParser:
         # sensor intrinsics
         sensor_type = sensor['sensor_type']
         use_polar = sensor['use_polar']
+
         range_resolution = sensor['range_resolution']
         W_metadata = sensor['W_metadata'] if sensor['W_metadata'] is not None else 0
         azimuth_resolution = sensor['azimuth_resolution']
@@ -103,22 +148,35 @@ class WaveSensorDataParser:
         else:
             folder_surfix = f"_{factor}"
         image_dir = os.path.join(data_dir, "images" + folder_surfix)
-        image_paths = [os.path.join(image_dir, item) for item in os.listdir(image_dir)]
+        
+        filenames = os.listdir(image_dir)
+        filenames.sort()
+        image_paths = [os.path.join(image_dir, item) for item in filenames]
 
-        # Extract extrinsic matrices in world-to-camera format.
         imdata, image_names = load_images_from_folder(image_dir)
-        w2c_mats = []
-        camera_ids = []
+
+        multipath_dir = os.path.join(data_dir, "multipath_model/dist:50" + folder_surfix)
+        multipath_data = load_multipath_from_folder(multipath_dir)
+        
+        # Apply frame_selection
+        if frame_selection is not None:
+            image_paths = image_paths[frame_selection[0]:frame_selection[1]]
+            imdata = imdata[frame_selection[0]:frame_selection[1]]
+            image_names = image_names[frame_selection[0]:frame_selection[1]]
+            poses = poses[frame_selection[0]:frame_selection[1]]
+        
+        w2r_mats = []
+        radar_ids = []
         Ks_dict = dict()
         imsize_dict = dict()  # width, height
         mask_dict = dict()
         for k, im in enumerate(imdata):
-            w2c = poses[k]
-            w2c_mats.append(w2c)
+            w2r = poses[k]
+            w2r_mats.append(w2r)
 
             # support different camera intrinsics
-            camera_id = 0 # use the same camera intrinsics for all images
-            camera_ids.append(camera_id)
+            radar_id = 0 # use the same camera intrinsics for all images
+            radar_ids.append(radar_id)
 
             if sensor_type == 'scanning_radar' or sensor_type == 'sonar':
                 if use_polar == True:
@@ -139,26 +197,23 @@ class WaveSensorDataParser:
                         [0, 0, 1],
                     ])
             
-            Ks_dict[camera_id] = K
+            Ks_dict[radar_id] = K
             assert sensor['H']==im.height and sensor['W']==im.width, "Image size does not match sensor size."
-            imsize_dict[camera_id] = (im.width // factor, H) # apply factor to image width (range) only
-            mask_dict[camera_id] = None
+            imsize_dict[radar_id] = (im.width // factor, H) # apply factor to image width (range) only
+            mask_dict[radar_id] = None
         print(
-            f"[Parser] {len(imdata)} images, taken by {len(set(camera_ids))} cameras."
+            f"[Parser] {len(imdata)} images, taken by {len(set(radar_ids))} cameras."
         )
 
         if len(imdata) == 0:
             raise ValueError("No images found in data folder.")
 
-        w2c_mats = np.stack(w2c_mats, axis=0)
-
-        # Convert extrinsics to camera-to-world.
-        camtoworlds = np.linalg.inv(w2c_mats)
+        radarposes = np.stack(w2r_mats, axis=0)
 
         inds = np.argsort(image_names)
         image_names = [image_names[i] for i in inds]
-        camtoworlds = camtoworlds[inds]
-        camera_ids = [camera_ids[i] for i in inds]
+        radarposes = radarposes[inds]
+        radar_ids = [radar_ids[i] for i in inds]
 
         # Load bounds if possible (only used in forward facing scenes).
         self.bounds = np.array([0.01, 1.0]) # TODO: not sure what is this bound for?
@@ -184,17 +239,17 @@ class WaveSensorDataParser:
 
         self.image_names = image_names  # List[str], (num_images,)
         self.image_paths = image_paths  # List[str], (num_images,)
-        self.camtoworlds = camtoworlds  # np.ndarray, (num_images, 4, 4)
-        self.camera_ids = camera_ids  # List[int], (num_images,)
-        self.Ks_dict = Ks_dict  # Dict of camera_id -> K
-        self.imsize_dict = imsize_dict  # Dict of camera_id -> (width, height)
-        self.mask_dict = mask_dict  # Dict of camera_id -> mask
+        self.radarposes = radarposes  # np.ndarray, (num_images, 4, 4)
+        self.radar_ids = radar_ids  # List[int], (num_images,)
+        self.Ks_dict = Ks_dict  # Dict of radar_id -> K
+        self.imsize_dict = imsize_dict  # Dict of radar_id -> (width, height)
+        self.mask_dict = mask_dict  # Dict of radar_id -> mask
         self.transform = transform  # np.ndarray, (4, 4)
 
         # size of the scene measured by cameras
-        camera_locations = camtoworlds[:, :3, 3]
-        scene_center = np.mean(camera_locations, axis=0)
-        dists = np.linalg.norm(camera_locations - scene_center, axis=1)
+        radar_locations = radarposes[:, :3, 3]
+        scene_center = np.mean(radar_locations, axis=0)
+        dists = np.linalg.norm(radar_locations - scene_center, axis=1)
         # Define the scene scale as the maximum distance from the center of the scene to the camera locations
         # plus the maximum sensing range of the sensor
         self.scene_scale = np.max(dists) + 2 * W * sensor['range_resolution']
@@ -202,6 +257,8 @@ class WaveSensorDataParser:
         # For radar sensor 
         self.sensor_type = sensor_type
         self.use_polar = use_polar
+        self.W = sensor['W']
+        self.H = sensor['H']
         self.intermediate_azimuth_resolution = intermediate_azimuth_resolution
         self.W_metadata = W_metadata
         self.max_range = max_range
@@ -209,7 +266,76 @@ class WaveSensorDataParser:
         self.azimuth_resolution = azimuth_resolution
         self.azimuth_beamwidth = azimuth_beamwidth
         self.azimuth_coverage = azimuth_coverage
+        self.scene_center = scene_center
+        
+        self.multipath_data = multipath_data
 
+        # # Check cart_to_polar # TODO: move to unit test
+        # from radar.utils import polar_to_cart, cart_to_polar
+        # for index in range(len(self.image_paths)):
+        #     image = imageio.imread(self.image_paths[index])
+        #     image = image[:,self.W_metadata:]
+        #     if self.max_range is not None:
+        #         W = int(self.max_range / self.range_resolution)
+        #         image = image[:,:W]
+            
+        #     image_np = image.copy()/255.
+        #     image = torch.from_numpy(image).float()                  
+            
+        #     num_bins_to_show = image.shape[1]
+        #     bin_size = self.range_resolution
+        #     num_azims = int(360/self.azimuth_resolution)
+        #     image_cart = polar_to_cart(image.detach().cpu().numpy()/255., num_bins_to_show, bin_size, num_azims,
+        #             resolution=1000, noise_floor=None, norm=False)
+            
+        #     recovered_image_polar = cart_to_polar(image_cart, num_bins_to_show, bin_size, num_azims,
+        #             resolution=1000, noise_floor=None, norm=False)
+            
+        #     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(16, 4))  # Create 1 row, 3 columns
+
+        #     ax1.imshow(image_np, vmin=0.0, vmax=1.0)
+        #     ax1.axis('off')
+        #     ax2.imshow(image_cart, vmin=0.0, vmax=1.0)
+        #     ax2.axis('off')
+        #     ax3.imshow(recovered_image_polar, vmin=0.0, vmax=1.0)
+        #     ax3.axis('off')
+        #     ax4.imshow(np.abs(image_np-recovered_image_polar))
+        #     ax4.axis('off')
+        #     plt.show()
+
+        
+        # # Check RadarFields noise removal # TODO: move to unit test
+        # import matplotlib.pyplot as plt
+        # from radar.utils import polar_to_cart
+        # for index in range(len(self.image_paths)):
+        #     image = imageio.imread(self.image_paths[index])
+        #     image = image[:,self.W_metadata:]
+        #     if self.max_range is not None:
+        #         W = int(self.max_range / self.range_resolution)
+        #         image = image[:,:W]
+                
+        #     image = torch.from_numpy(image).float()
+        #     image_thres = compute_spherical_grid_noise_threshold(image, 0, image.shape[1])
+            
+        #     img = torch.cat((image_thres, image),dim=0)/255.
+        #     fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
+        #     ax.imshow(img.detach().cpu().numpy(), vmin=0.0, vmax=1.0)
+        #     ax.axis('off') 
+        #     plt.show()                   
+            
+        #     num_bins_to_show = image.shape[1]
+        #     bin_size = self.range_resolution
+        #     num_azims = int(360/self.azimuth_resolution)
+        #     image_cart = polar_to_cart(image.detach().cpu().numpy()/255., num_bins_to_show, bin_size, num_azims,
+        #             resolution=1000, noise_floor=None, norm=False)
+        #     image_thres_cart = polar_to_cart(image_thres.detach().cpu().numpy()/255., num_bins_to_show, bin_size, num_azims,
+        #             resolution=1000, noise_floor=None, norm=False)
+            
+        #     fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
+        #     cart_img = np.hstack((image_cart, image_thres_cart))
+        #     ax.imshow(cart_img, vmin=0.0, vmax=1.0)
+        #     ax.axis('off')
+        #     plt.show()
 
 
 class WaveSensorDataset:
@@ -218,7 +344,7 @@ class WaveSensorDataset:
     def __init__(
         self,
         parser: WaveSensorDataParser,
-        split: str = "train",
+        split: Literal["train", "val", "all"] = "train",
     ):
         self.parser = parser
         self.split = split
@@ -227,8 +353,10 @@ class WaveSensorDataset:
             self.indices = indices[indices % self.parser.test_every != 0]
             if len(indices)==1: # Single image. Set the image as train set.
                 self.indices = indices
-        else:
+        elif split == "val":
             self.indices = indices[indices % self.parser.test_every == 0]
+        elif split == "all":
+            self.indices = indices
 
     def __len__(self):
         return len(self.indices)
@@ -236,6 +364,31 @@ class WaveSensorDataset:
     def __getitem__(self, item: int) -> Dict[str, Any]:
         index = self.indices[item]
         image = imageio.imread(self.parser.image_paths[index])
+        
+        # Load LiDAR
+        synced_lidar_path = self.parser.image_paths[index].replace("images", "synced_lidar").replace("png", "pcd")
+        pcd = o3d.io.read_point_cloud(synced_lidar_path)
+
+        # Load LiDAR Map
+        # synced_lidar_map_path = self.parser.image_paths[index].replace("images", "synced_lidar_map_win5").replace("png", "pcd")
+        synced_lidar_map_path = self.parser.image_paths[index].replace("images", f'{self.parser.synced_lidar_map_name}').replace("png", "pcd")
+        
+        map_pcd = o3d.io.read_point_cloud(synced_lidar_map_path)
+
+        # Load Radar Map # TODO load from args
+        # radar_map_path = self.parser.image_paths[index].replace("images", "radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21")
+        # radar_map_path = self.parser.image_paths[index].replace("images", "baseline_polar_occ_filtered_polar/res:0.0596_dist:50_win_size:0")
+        
+        # radar_map_path = self.parser.image_paths[index].replace("images", "radar_average_map_polar/res:0.0596_dist:50_win_size:5_CR_thres:0.21_smooth:3.0")
+        
+        radar_map_path = self.parser.image_paths[index].replace("images", f'{self.parser.radar_average_map_name}')
+
+        radar_map_image_polar = imageio.imread(radar_map_path)
+        radar_map_image_polar = torch.from_numpy(radar_map_image_polar).float()/255.
+
+        # Load Multipath Source
+        multipath_sources_path = self.parser.image_paths[index].replace("images", "multipath_model/dist:50").replace("png", "npy")
+        multipath_sources = np.load(multipath_sources_path, allow_pickle=True).item()
         
         if image.ndim==3 and image.shape[-1]==3:
             # The data is in rgb. Convert to gray-scaled
@@ -247,17 +400,27 @@ class WaveSensorDataset:
         if self.parser.max_range is not None:
             W = int(self.parser.max_range / self.parser.range_resolution)
             image = image[:,:W]
+        
+        image = torch.from_numpy(image).float()
+        
+        # Apply dynamic threshold
+        image_thres = compute_spherical_grid_noise_threshold(image, 0, image.shape[1])
 
-        camera_id = self.parser.camera_ids[index]
-        K = self.parser.Ks_dict[camera_id].copy()  # undistorted K
-        camtoworlds = self.parser.camtoworlds[index]
-        mask = self.parser.mask_dict[camera_id]
+        radar_id = self.parser.radar_ids[index]
+        K = self.parser.Ks_dict[radar_id].copy()  # undistorted K
+        radarposes = self.parser.radarposes[index]
+        mask = self.parser.mask_dict[radar_id]
 
         data = {
             "K": torch.from_numpy(K).float(),
-            "camtoworld": torch.from_numpy(camtoworlds).float(),
-            "image": torch.from_numpy(image).float(),
+            "radarpose": torch.from_numpy(radarposes).float(),
+            "image": image,
+            "image_thres": image_thres,
             "image_id": item,  # the index of the image in the dataset
+            "synced_lidar": np.asarray(pcd.points),
+            "synced_lidar_map": np.asarray(map_pcd.points),
+            "preprocess_radar_map_polar": radar_map_image_polar,
+            "multipath_sources": multipath_sources,
         }
         if mask is not None:
             data["mask"] = torch.from_numpy(mask).bool()

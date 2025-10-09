@@ -160,6 +160,9 @@ def split(
         elif name == "opacities" and revised_opacity:
             new_opacities = 1.0 - torch.sqrt(1.0 - torch.sigmoid(p[sel]))
             p_split = torch.logit(new_opacities).repeat(repeats)  # [2N]
+        elif name == "noise_probs" and revised_opacity:
+            new_noise_probs = 1.0 - torch.sqrt(1.0 - torch.sigmoid(p[sel]))
+            p_split = torch.logit(new_noise_probs).repeat(repeats)  # [2N]
         else:
             p_split = p[sel].repeat(repeats)
         p_new = torch.cat([p[rest], p_split])
@@ -229,16 +232,31 @@ def reset_opa(
         if name == "opacities":
             opacities = torch.clamp(p, max=torch.logit(torch.tensor(value)).item())
             return torch.nn.Parameter(opacities, requires_grad=p.requires_grad)
+        elif name == "noise_probs":
+            noise_probs = torch.clamp(p, max=torch.logit(torch.tensor(value)).item())
+            return torch.nn.Parameter(noise_probs, requires_grad=p.requires_grad)
         else:
             raise ValueError(f"Unexpected parameter name: {name}")
+
+    # (Frank)
+    # def param_fn_noise_prob(name: str, p: Tensor) -> Tensor:
+    #     if name == "noise_probs":
+    #         noise_probs = torch.clamp(p, max=torch.logit(torch.tensor(value)).item())
+    #         return torch.nn.Parameter(noise_probs, requires_grad=p.requires_grad)
+    #     else:
+    #         raise ValueError(f"Unexpected parameter name: {name}")
 
     def optimizer_fn(key: str, v: Tensor) -> Tensor:
         return torch.zeros_like(v)
 
     # update the parameters and the state in the optimizers
     _update_param_with_optimizer(
-        param_fn, optimizer_fn, params, optimizers, names=["opacities"]
+        param_fn, optimizer_fn, params, optimizers, names=["opacities", "noise_probs"]
     )
+
+    # _update_param_with_optimizer(
+    #     param_fn_noise_prob, optimizer_fn, params, optimizers, names=["noise_probs"]
+    # )
 
 
 @torch.no_grad()
@@ -259,6 +277,7 @@ def relocate(
     """
     # support "opacities" with shape [N,] or [N, 1]
     opacities = torch.sigmoid(params["opacities"])
+    noise_probs = torch.sigmoid(params["noise_probs"])
 
     dead_indices = mask.nonzero(as_tuple=True)[0]
     alive_indices = (~mask).nonzero(as_tuple=True)[0]
@@ -267,19 +286,25 @@ def relocate(
     # Sample for new GSs
     eps = torch.finfo(torch.float32).eps
     probs = opacities[alive_indices].flatten()  # ensure its shape is [N,]
-    sampled_idxs = _multinomial_sample(probs, n, replacement=True)
+    noise_probs_ = noise_probs[alive_indices].flatten()  # ensure its shape is [N,]
+
+    sampled_idxs = _multinomial_sample(torch.clamp(probs+noise_probs_, 0, 1), n, replacement=True)
     sampled_idxs = alive_indices[sampled_idxs]
-    new_opacities, new_scales = compute_relocation(
+    new_opacities, new_noise_probs, new_scales = compute_relocation(
         opacities=opacities[sampled_idxs],
+        noise_probs=noise_probs[sampled_idxs],
         scales=torch.exp(params["scales"])[sampled_idxs],
         ratios=torch.bincount(sampled_idxs)[sampled_idxs] + 1,
         binoms=binoms,
     )
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
+    new_noise_probs = torch.clamp(new_noise_probs, max=1.0 - eps, min=min_opacity)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
         if name == "opacities":
             p[sampled_idxs] = torch.logit(new_opacities)
+        elif name == "noise_probs":
+            p[sampled_idxs] = torch.logit(new_noise_probs)
         elif name == "scales":
             p[sampled_idxs] = torch.log(new_scales)
         p[dead_indices] = p[sampled_idxs]
@@ -307,21 +332,27 @@ def sample_add(
     min_opacity: float = 0.005,
 ):
     opacities = torch.sigmoid(params["opacities"])
+    noise_probs = torch.sigmoid(params["noise_probs"])
 
     eps = torch.finfo(torch.float32).eps
     probs = opacities.flatten()
-    sampled_idxs = _multinomial_sample(probs, n, replacement=True)
-    new_opacities, new_scales = compute_relocation(
+    noise_probs_ = noise_probs.flatten()
+    sampled_idxs = _multinomial_sample(torch.clamp(probs+noise_probs_, 0, 1), n, replacement=True)
+    new_opacities, new_noise_probs, new_scales = compute_relocation(
         opacities=opacities[sampled_idxs],
+        noise_probs=noise_probs[sampled_idxs],
         scales=torch.exp(params["scales"])[sampled_idxs],
         ratios=torch.bincount(sampled_idxs)[sampled_idxs] + 1,
         binoms=binoms,
     )
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
+    new_noise_probs = torch.clamp(new_noise_probs, max=1.0 - eps, min=min_opacity)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
         if name == "opacities":
             p[sampled_idxs] = torch.logit(new_opacities)
+        elif name == "noise_probs":
+            p[sampled_idxs] = torch.logit(new_noise_probs)
         elif name == "scales":
             p[sampled_idxs] = torch.log(new_scales)
         p_new = torch.cat([p, p[sampled_idxs]])
@@ -348,6 +379,8 @@ def inject_noise_to_position(
     scaler: float,
 ):
     opacities = torch.sigmoid(params["opacities"].flatten())
+    noise_probs = torch.sigmoid(params["noise_probs"].flatten())
+
     scales = torch.exp(params["scales"])
     covars, _ = quat_scale_to_covar_preci(
         params["quats"],

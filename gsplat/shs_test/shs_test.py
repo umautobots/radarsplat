@@ -108,21 +108,22 @@ if __name__ == "__main__":
 
     # Evaluate true model
     power_data = evaluate_spherical_harmonics_axisymmetric(theta_samples, true_coeffs)
-    # Add some noise
     power_data_noisy = power_data #+ 0.001 * np.random.randn(N_samples)
-
+    
+    power_data_noisy = np.zeros_like(theta_samples)
+    power_data_noisy[:] = 0.0
+    power_data_noisy[:20] = 0.1
 
     # theta_samples = np.linspace(0, 2*np.pi, 200)  # theta from 0 to pi
     # power_data = np.abs(np.sin(theta_samples))  # some example power pattern
-    vis_theta_power_plot(theta_samples, power_data)
-
+    # vis_theta_power_plot(theta_samples, power_data)
     vis_theta_power_plot(theta_samples, power_data_noisy)
 
     # Fit the model up to L_max=2
-    L_max_fit = 1000 #3 #9
+    L_max_fit = 10 #3 #9
     fitted_coeffs = fit_spherical_harmonics_axisymmetric(theta_samples, power_data_noisy, L_max_fit)
 
-    print("True coefficients:", true_coeffs)
+    # print("True coefficients:", true_coeffs)
     print("Fitted coefficients:", fitted_coeffs)
 
     # Evaluate fitted model

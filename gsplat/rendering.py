@@ -812,6 +812,7 @@ def _radar_rasterization(
     quats: Tensor,  # [N, 4]
     scales: Tensor,  # [N, 3]
     opacities: Tensor,  # [N]
+    noise_probs: Tensor,  # [N]
     colors: Tensor,  # [(C,) N, D] or [(C,) N, K, 3]
     viewmats: Tensor,  # [C, 4, 4]
     Ks: Tensor,  # [C, 3, 3]
@@ -866,6 +867,7 @@ def _radar_rasterization(
     assert quats.shape == (N, 4), quats.shape
     assert scales.shape == (N, 3), scales.shape
     assert opacities.shape == (N,), opacities.shape
+    assert noise_probs.shape == (N,), noise_probs.shape
     assert viewmats.shape == (C, 4, 4), viewmats.shape
     assert Ks.shape == (C, 3, 3), Ks.shape
 
@@ -913,6 +915,14 @@ def _radar_rasterization(
     # Use spherical coordinate
     if sph:
         # Note that this conversion can be unstable when gaussian is close to the origin and with large covariance.
+        
+        # Apply extrinsic to means
+        # TODO: support distributed
+        ones = torch.ones((means.shape[0], 1)).to('cuda')
+        means_h = torch.cat([means, ones], dim=1)  # (N, 4)
+        means = means_h @ viewmats[0].inverse().T # (N, 4)
+        means = means[:, :3]  # (N, 3)
+        
         means, covars = _cartesian_to_spherical(means, covars) # [range (m), theta (-pi~pi), phi (-pi~pi)]
 
         # _cartesian_to_spherical_fixed_grad = _cartesian_to_spherical_fixed_bwd()
@@ -943,12 +953,18 @@ def _radar_rasterization(
     # )
     
     ##### CUDA #####
-    radii, means2d, depths, conics, compensations  = fully_fused_projection(
+    # The extrinsic matrix is applied to cart to polar transformation. 
+    # Just need to pass identity matrix into projection function here.
+    eye_mats = torch.zeros((C, 4, 4)).to('cuda')
+    eye_mats[:] = torch.eye(4)
+    proj_viewmats = eye_mats if sph else viewmats.inverse()
+
+    radii, means2d, depths, conics, compensations  = fully_fused_projection( # only 2d reconstruction without considering elevation antenna gain
         means,
         covars, # Directly pass in {quats, scales} is faster than precomputing covars. # Frank: 99 s vs 111 s when fitting single frame.
         quats,
         scales,
-        viewmats,
+        proj_viewmats,
         Ks,
         width, # width, height are used to check and disable gaussian with large covariance
         height,
@@ -963,10 +979,13 @@ def _radar_rasterization(
     )
 
     opacities = opacities.repeat(C, 1)  # [C, N]
+    noise_probs = noise_probs.repeat(C, 1)  # [C, N]
+
     camera_ids, gaussian_ids = None, None
 
     if compensations is not None:
         opacities = opacities * compensations
+        noise_probs = noise_probs * compensations
     
     # This is a hack for radarGS to handle negative depth. Set all depths to 0, since the order doesn't matter in radarGS.
     depths_isect_tiles = torch.zeros_like(depths)
@@ -1013,8 +1032,8 @@ def _radar_rasterization(
             pass
     else:
         # Colors are SH coefficients, with shape [N, K, 3] or [C, N, K, 3]
-        camtoworlds = torch.inverse(viewmats)  # [C, 4, 4]
-        dirs = means[None, :, :] - camtoworlds[:, None, :3, 3]  # [C, N, 3]
+        # camtoworlds = torch.inverse(viewmats)  # [C, 4, 4]
+        dirs = means[None, :, :] - viewmats[:, None, :3, 3]  # [C, N, 3]
         masks = radii > 0  # [C, N]
         if colors.dim() == 3:
             # Turn [N, K, 3] into [C, N, 3]
@@ -1024,7 +1043,16 @@ def _radar_rasterization(
             shs = colors
         colors = spherical_harmonics(sh_degree, dirs, shs, masks=masks)  # [C, N, 3]
         # make it apple-to-apple with Inria's CUDA Backend.
-        colors = torch.clamp_min(colors + 0.5, 0.0)
+        colors = torch.clamp_min(colors + 0.5, 1e-6)
+
+    # Convert first channel of color to reflectance 
+    reflectance = torch.clamp_max(colors[:,:,0], 1.0) 
+
+    # Apply view dependency to opacities
+    # powers = opacities * reflectance
+    
+    # For debuging !!!!!!!!!!!!!!!!!!!!!
+    # check_thres(0.5, shs, opacities, means2d, conics, width, height, tile_size, isect_offsets, flatten_ids, batch_per_iter)
     
     # If in distributed mode, we need to scatter the GSs to the destination ranks, based
     # on which cameras they are visible to, which we already figured out in the projection
@@ -1168,8 +1196,22 @@ def _radar_rasterization(
         render_colors = torch.cat(render_colors, dim=-1)
         render_alphas = render_alphas[0]  # discard the rest
     else:
-        # Radar Autograd
-        render_alphas = _rasterize_to_radar_pixels(
+        # Radar intensity rendering w/ Autograd
+        opacities_w_reflectance = torch.clamp(opacities + noise_probs, min=1e-6, max=1) * reflectance
+
+        render_powers = _rasterize_to_radar_pixels(
+            means2d,
+            conics,
+            opacities_w_reflectance, #opacities,
+            width,
+            height,
+            tile_size,
+            isect_offsets,
+            flatten_ids,
+            batch_per_iter=batch_per_iter,
+        )
+
+        render_occupancy = _rasterize_to_radar_pixels(
             means2d,
             conics,
             opacities,
@@ -1181,6 +1223,83 @@ def _radar_rasterization(
             batch_per_iter=batch_per_iter,
         )
 
+        render_noise_probs = _rasterize_to_radar_pixels(
+            means2d,
+            conics,
+            noise_probs,
+            width,
+            height,
+            tile_size,
+            isect_offsets,
+            flatten_ids,
+            batch_per_iter=batch_per_iter,
+        )
+
+        opacities_x_reflectance = torch.clamp(opacities * reflectance, min=1e-6, max=1)
+        render_opa_refl = _rasterize_to_radar_pixels(
+            means2d,
+            conics,
+            opacities_x_reflectance,
+            width,
+            height,
+            tile_size,
+            isect_offsets,
+            flatten_ids,
+            batch_per_iter=batch_per_iter,
+        )
+
+        noise_probs_x_reflectance = torch.clamp(noise_probs * reflectance, min=1e-6, max=1)
+        render_noise_refl = _rasterize_to_radar_pixels(
+            means2d,
+            conics,
+            noise_probs_x_reflectance,
+            width,
+            height,
+            tile_size,
+            isect_offsets,
+            flatten_ids,
+            batch_per_iter=batch_per_iter,
+        )
+
+        render_reflectance = _rasterize_to_radar_pixels(
+            means2d,
+            conics,
+            reflectance,
+            width,
+            height,
+            tile_size,
+            isect_offsets,
+            flatten_ids,
+            batch_per_iter=batch_per_iter,
+        )
+
+
+        # # Radar intensity rendering w/ Autograd
+        # render_powers = _rasterize_to_radar_pixels(
+        #     means2d,
+        #     conics,
+        #     powers,
+        #     width,
+        #     height,
+        #     tile_size,
+        #     isect_offsets,
+        #     flatten_ids,
+        #     batch_per_iter=batch_per_iter,
+        # )
+
+        # # Radar opacity rendering w/ Autograd
+        # render_opacities = _rasterize_to_radar_pixels(
+        #     means2d,
+        #     conics,
+        #     opacities,
+        #     width,
+        #     height,
+        #     tile_size,
+        #     isect_offsets,
+        #     flatten_ids,
+        #     batch_per_iter=batch_per_iter,
+        # )
+        
         # Autograd
         # render_colors, render_alphas = _rasterize_to_pixels(
         #     means2d,
@@ -1214,7 +1333,11 @@ def _radar_rasterization(
         # )
         
         # Note that the accumulated radar render_alphas can be >1, so we need to clamp it to between 0 and 1 
-        render_alphas = torch.clamp(render_alphas, 0, 1)
+        render_powers = torch.clamp(render_powers, 1e-6, 1)
+        render_occupancy = torch.clamp(render_occupancy, 1e-6, 1)
+        render_noise_probs = torch.clamp(render_noise_probs, 1e-6, 1)
+        render_opa_refl = torch.clamp(render_opa_refl, 1e-6, 1)
+        render_noise_refl = torch.clamp(render_noise_refl, 1e-6, 1)
         
     # TODO: Consider depth(height) info here following the render_mode setting in _rasterization
     # ...
@@ -1238,9 +1361,47 @@ def _radar_rasterization(
         "tile_size": tile_size,
         "n_cameras": C,
     }
-    return render_alphas, meta
+    return render_powers, render_occupancy, render_noise_probs, render_opa_refl, render_noise_refl, render_reflectance, meta
 
+import numpy as np
 
+def spectral_leakage(raw_image, range_resolution, sinc_width=1.):
+    
+    sigma = int(((sinc_width/2.)/range_resolution)/3.) # pixels
+    kernel_size = int(sigma*6)+1 # pixels
+    if kernel_size%2==0: kernel_size+=1
+    
+    kernel = torch.exp(-0.5 * (torch.arange(kernel_size) - kernel_size // 2)**2 / sigma**2).cuda()
+    kernel = kernel / kernel.sum()
+    kernel = kernel.view(1, 1, 1, -1)  # Shape: (out_channels, in_channels, kernel_H, kernel_W)
+    
+    # x = torch.arange(kernel_size) - kernel_size // 2
+    # plt.figure(figsize=(8, 4))
+    # plt.plot(x.numpy(), kernel.squeeze().numpy(), marker='o')
+    # plt.title(f'1D Gaussian Kernel (sigma={sigma})')
+    # plt.xlabel('Kernel Index')
+    # plt.ylabel('Weight')
+    # plt.grid(True)
+    # plt.show()
+
+    # Reshape for conv2d: (batch_size=1, channels=1, height=azimuth_with_padding, width=range_size)
+    raw_image_reshaped = raw_image.permute(2, 0, 1).unsqueeze(0)
+
+    # Apply 2D convolution with stride only along the range axis
+    stride = 1
+    padding = kernel_size // 2
+    output = F.conv2d(raw_image_reshaped, kernel, stride=(1, stride), padding=(0, padding))
+
+    # Reshape the result back to the desired format: (new_azimuth_size, range_size, channels)
+    output_image = output.squeeze().unsqueeze(-1)
+    
+    # saturate_mask = output_image>raw_image
+    # output_image[saturate_mask] = raw_image[saturate_mask]
+    
+    # saturate_mask = output_image>1
+    # output_image[saturate_mask] = 1
+
+    return output_image
 
 def azimuth_antenna_gain_projection(raw_image: torch.tensor, new_resolution: float=0.9, beamwidth: float=1.8):
     import torch.nn.functional as F
