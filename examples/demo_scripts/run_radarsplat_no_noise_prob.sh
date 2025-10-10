@@ -45,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       RESULT_DIR="$2"
       shift 2
       ;;
+    --data_dir)
+      DATA_DIR="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -73,18 +77,18 @@ if [[ -n "$CKPT_PATH" ]]; then
 fi
 
 # Move back to project root
-cd "$HOME/gsplat"
+cd "$HOME/radarsplat"
 
 # Run training # Config used to report number in the paper
 run_training() {
   local OPA_NOISE_REG_LOSS_LAMBDA="${1:-${OPA_NOISE_REG_LOSS_LAMBDA:-1e3}}"
-  python examples/radar_simple_trainer.py default \
+  python $HOME/radarsplat/examples/radar_simple_trainer.py default \
       --eval_set val+all \
       --save_fig \
       --use_lidar_map \
       --no-preprocess_thres \
       --data_factor 1 \
-      --data_dir "/mnt/ws-frb/projects/radar_splat/data/wave_gs" \
+      --data_dir "$DATA_DIR" \
       --result_dir "$RESULT_DIR" \
       --seq_name "$SCENE_NAME" \
       --frame_selection "${FRAME_SELECTION[@]}" \
@@ -118,7 +122,7 @@ run_training() {
       $CKPT_ARG
 }
 
-MAX_RETRIES=3
+MAX_RETRIES=5
 RETRY_COUNT=0
 
 while true; do

@@ -2,8 +2,10 @@
 
 # set -e
 
-# Load experiments from seq_all.txt
-SEQUENCE_FILE=$1 # "./seq_all.txt"
+SEQUENCE_FILE=$1 
+# "SEQUENCE_FILE=./seq_all.txt"
+DATA_DIR=$2
+# DATA_DIR="/mnt/ws-frb/projects/radar_splat/data/wave_gs"
 
 # Shared settings
 INIT_NUM_PTS=20000
@@ -66,8 +68,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/gsplat/examples/demo_scripts/run_radarsplat_no_noise_prob.sh \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat_no_noise_prob.sh \
     --result_dir $RESULT_DIR \
+    --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
@@ -93,8 +96,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/gsplat/examples/demo_scripts/run_radarsplat_no_mp_modeling.sh \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat_no_mp_modeling.sh \
     --result_dir $RESULT_DIR \
+    --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
@@ -120,8 +124,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/gsplat/examples/demo_scripts/run_radarsplat_no_sl.sh \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat_no_sl.sh \
     --result_dir $RESULT_DIR \
+    --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
@@ -147,8 +152,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/gsplat/examples/demo_scripts/run_radarsplat_no_occ.sh \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat_no_occ.sh \
     --result_dir $RESULT_DIR \
+    --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
@@ -174,8 +180,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/gsplat/examples/demo_scripts/run_radarsplat.sh \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
     --result_dir $RESULT_DIR \
+    --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \

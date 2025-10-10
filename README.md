@@ -1,8 +1,10 @@
 # RadarSplat
 
 ### RadarSplat: Radar Gaussian Splatting for High-Fidelity Data Synthesis and 3D Reconstruction of Autonomous Driving Scenes
+**ICCV 2025**
 
 Pou-Chun Kung, Skanda Harisha, Ram Vasudevan, Aline Eid, Katherine A. Skinner
+
 
 [[Paper](https://arxiv.org/pdf/2506.01379)] |
 [[Project Page](https://umautobots.github.io/radarsplat)]
@@ -18,11 +20,67 @@ High-Fidelity 3D scene reconstruction plays a crucial role in autonomous driving
 
 </details>
 
+## Get Started
 
-## Prepare Environment
+Clone the repo:
+```bash
+# Clone Repo
+git clone --recursive https://github.com/umautobots/radarsplat.git
+```
+
+Conda environment prepare:
+```bash
+# Create conda environment
+conda create --name radarsplat -y python=3.9
+conda activate radarsplat
+pip install --upgrade pip
+```
+
+Install CUDA based on your GPU:
+```bash
+# For CUDA 11.8 (change to CUDA version that support your GPU)
+pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.get_device_name(0))"
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+```
 
 ```bash
-conda ...
+# For CUDA 12.8 (change to CUDA version that support your GPU)
+pip install --pre torch torchvision torchaudio \
+  --index-url https://pypi.org/simple \
+  --extra-index-url https://download.pytorch.org/whl/nightly/cu128
+python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.get_device_name(0))"
+conda install -y -c nvidia cuda-toolkit=12.8
+pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+```
+
+Install RadarSplat:
+```
+# Install gsplat dependencies
+cd examples
+pip install -r requirements.txt
+
+# Install other dependencies
+pip install open3d
+pip install wandb
+
+cd ~/radarsplat
+# Make sure the submodule is cloned recursively
+git submodule update --init --recursive
+# Install radarsplat/gsplat
+pip install -e . --no-build-isolation --config-settings editable_mode=compat
+```
+
+#### TroubleShooting
+```pip install -r requirements.txt``` can fail in some devices with this error:
+```
+ERROR: Could not find a version that satisfies the requirement jaxtyping==0.2.29 (from nerfview) (from versions: 0.0.1, 0.0.2, 0.1.0, 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5, 0.2.6, 0.2.7, 0.2.8, 0.2.9, 0.2.10, 0.2.11, 0.2.12, 0.2.13, 0.2.14, 0.2.15, 0.2.16, 0.2.17, 0.2.18, 0.2.19) ERROR: No matching distribution found for jaxtyping==0.2.29
+```
+To solve this, please comment out ```nerfview``` in ```requirements.txt``` and run:
+```
+pip install nerfview --no-deps
+pip install jaxtyping==0.2.19
 ```
 
 ## Prepare Dataset
@@ -42,31 +100,9 @@ If you want to test on other sequences, please make sure the selected sequences 
 
 
 ## Data Preprocessing
-
 Install [pyboreas library](https://github.com/utiasASRL/pyboreas) for data preprocessing.
 ```bash
 pip install asrl-pyboreas
-```
-
-Disable local CUDA in case it conflict with CUDA version in conda env
-```bash
-# Backup and remove from PATH
-export PATH=$(echo $PATH | tr ':' '\n' | grep -v '/usr/local/cuda' | paste -sd ':' -)
-# Remove from LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH | tr ':' '\n' | grep -v '/usr/local/cuda' | paste -sd ':' -)
-# Unset CUDA_HOME if it points to system CUDA
-unset CUDA_HOME
-
-conda install -c nvidia cuda-nvcc=11.7
-conda install -c nvidia cuda-toolkit=11.7
-```
-
-Then install:
-```bash
-pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
-
-cd examples
-pip install -r requirements.txt
 ```
 
 Run the following Linux script to preprocess the data for a demo sequence. 
@@ -89,7 +125,7 @@ bash boreas/data_processing/scripts/process_seq_paper.sh $DATA_ROOT boreas-2021-
 ```
 
 The following folders will be created under each boreas sequence folder:
-```bash
+```
 ├── sensor.yaml
 ├── multipath_model
 ├── radar_average_map
@@ -101,17 +137,30 @@ The following folders will be created under each boreas sequence folder:
 
 ## Run RadarSplat
 
-Run demo sequence experiments and ablation studies. 
+Run experiments with a demo sequence:
+
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_demo.txt
 ```
 
-Run full experiments and ablation studies in the paper. 
+Run **full experiments** in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_all.txt
 ```
+Run **method ablation** reported in the paper:
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat_abla.sh ./seq_all.txt
+```
+Run **Gaussian initialization ablation** studies:
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat_init_abla.sh ./seq_all.txt
+```
+Disable wandb by setting USE_WANDB=0 and change assigned GPU id by changing GPU=[ID] in ```run_all_radarsplat.sh, run_all_radarsplat_abla.sh, run_all_radarsplat_init_abla.sh```
+
 
 ## Evaluation
 Run demo sequence evaluation.
@@ -123,6 +172,36 @@ Run full evaluation.
 ```bash
 python eval_summary.py ./examples/demo_scripts/seq_all.txt
 ```
+You should see result like this:
+```
+------------- RadarSplat -------------
+                  psnr  ssim  lpips
+Image Eval. Mean 26.06  0.51   0.37
+                   RMSE  R-CD  accuracy  precision  recall
+Recon. Eval. Mean  1.81  0.04      0.91       0.71    0.94
+                   Occ_RMSE  Occ_R-CD  Occ_accuracy
+Recon. Eval. Mean      1.81      0.04          0.93
+------------- [Ablation] RadarSplat w/o noise probability  -------------
+                  psnr  ssim  lpips
+Image Eval. Mean 23.52  0.23   0.59
+                   RMSE  R-CD  accuracy  precision  recall
+Recon. Eval. Mean  1.82  0.04      0.91       0.71    0.94
+------------- [Ablation] RadarSplat w/o multipath modeling  -------------
+                  psnr  ssim  lpips
+Image Eval. Mean 25.95  0.50   0.37
+                   RMSE  R-CD  accuracy  precision  recall
+Recon. Eval. Mean  1.81  0.04      0.91       0.71    0.94
+------------- [Ablation] RadarSplat w/o spectual leakage  -------------
+                  psnr  ssim  lpips
+Image Eval. Mean 25.95  0.50   0.39
+                   RMSE  R-CD  accuracy  precision  recall
+Recon. Eval. Mean  2.05  0.05      0.91       0.70    0.94
+------------- [Ablation] RadarSplat w/o occupancy map  -------------
+                  psnr  ssim  lpips
+Image Eval. Mean 26.58  0.53   0.39
+                   RMSE  R-CD  accuracy  precision  recall
+Recon. Eval. Mean  1.86  0.23      0.30       0.66    0.30
+```
 
 ## Rendering/Visualization
 Render outputs from a trained model using all available frames (train + val) for evaluation and visualization.
@@ -130,84 +209,12 @@ Render outputs from a trained model using all available frames (train + val) for
 python examples/radar_simple_trainer.py default --ckpt <CHECKPOINT_PATH> --eval_set all --save_fig --use_lidar_map
 ```
 
+### TODO
+- [x] Code Release
+- [ ] Fix numerical instability
+- [ ] Support novel view multipath rendering for ego shifting
+- [ ] Clean up code for 3D reconstruction/visulization 
+- [ ] Multi-GPU training
 
 
 
-## Installation
-
-**Dependence**: Please install [Pytorch](https://pytorch.org/get-started/locally/) first.
-
-The easiest way is to install from PyPI. In this way it will build the CUDA code **on the first run** (JIT).
-
-```bash
-pip install gsplat
-```
-
-Alternatively you can install gsplat from source. In this way it will build the CUDA code during installation.
-
-```bash
-pip install git+https://github.com/nerfstudio-project/gsplat.git
-```
-
-We also provide [pre-compiled wheels](https://docs.gsplat.studio/whl) for both linux and windows on certain python-torch-CUDA combinations (please check first which versions are supported). Note this way you would have to manually install [gsplat's dependencies](https://github.com/nerfstudio-project/gsplat/blob/6022cf45a19ee307803aaf1f19d407befad2a033/setup.py#L115). For example, to install gsplat for pytorch 2.0 and cuda 11.8 you can run
-```
-pip install ninja numpy jaxtyping rich
-pip install gsplat --index-url https://docs.gsplat.studio/whl/pt20cu118
-```
-
-To build gsplat from source on Windows, please check [this instruction](docs/INSTALL_WIN.md).
-
-## Evaluation
-
-This repo comes with a standalone script that reproduces the official Gaussian Splatting with exactly the same performance on PSNR, SSIM, LPIPS, and converged number of Gaussians. Powered by gsplat’s efficient CUDA implementation, the training takes up to **4x less GPU memory** with up to **15% less time** to finish than the official implementation. Full report can be found [here](https://docs.gsplat.studio/main/tests/eval.html).
-
-```bash
-pip install -r examples/requirements.txt
-# download mipnerf_360 benchmark data
-python examples/datasets/download_dataset.py
-# run batch evaluation
-bash examples/benchmarks/basic.sh
-```
-
-## Examples
-
-We provide a set of examples to get you started! Below you can find the details about
-the examples (requires to install some exta dependencies via `pip install -r examples/requirements.txt`)
-
-- [Train a 3D Gaussian splatting model on a COLMAP capture.](https://docs.gsplat.studio/main/examples/colmap.html)
-- [Fit a 2D image with 3D Gaussians.](https://docs.gsplat.studio/main/examples/image.html)
-- [Render a large scene in real-time.](https://docs.gsplat.studio/main/examples/large_scale.html)
-
-
-## Development and Contribution
-
-This repository was born from the curiosity of people on the Nerfstudio team trying to understand a new rendering technique. We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software.
-
-This project is developed by the following wonderful contributors (unordered):
-
-- [Angjoo Kanazawa](https://people.eecs.berkeley.edu/~kanazawa/) (UC Berkeley): Mentor of the project.
-- [Matthew Tancik](https://www.matthewtancik.com/about-me) (Luma AI): Mentor of the project.
-- [Vickie Ye](https://people.eecs.berkeley.edu/~vye/) (UC Berkeley): Project lead. v0.1 lead.
-- [Matias Turkulainen](https://maturk.github.io/) (Aalto University): Core developer.
-- [Ruilong Li](https://www.liruilong.cn/) (UC Berkeley): Core developer. v1.0 lead.
-- [Justin Kerr](https://kerrj.github.io/) (UC Berkeley): Core developer.
-- [Brent Yi](https://github.com/brentyi) (UC Berkeley): Core developer.
-- [Zhuoyang Pan](https://panzhy.com/) (ShanghaiTech University): Core developer.
-- [Jianbo Ye](http://www.jianboye.org/) (Amazon): Core developer.
-
-We also have a white paper with about the project with benchmarking and mathematical supplement with conventions and derivations, available [here](https://arxiv.org/abs/2409.06765). If you find this library useful in your projects or papers, please consider citing:
-
-```
-@article{ye2024gsplatopensourcelibrarygaussian,
-    title={gsplat: An Open-Source Library for {Gaussian} Splatting}, 
-    author={Vickie Ye and Ruilong Li and Justin Kerr and Matias Turkulainen and Brent Yi and Zhuoyang Pan and Otto Seiskari and Jianbo Ye and Jeffrey Hu and Matthew Tancik and Angjoo Kanazawa},
-    year={2024},
-    eprint={2409.06765},
-    journal={arXiv preprint arXiv:2409.06765},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV},
-    url={https://arxiv.org/abs/2409.06765}, 
-}
-```
-
-We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software. Please check [docs/DEV.md](docs/DEV.md) for more info about development.
