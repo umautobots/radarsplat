@@ -141,23 +141,23 @@ Run experiments with a demo sequence:
 
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat.sh ./seq_demo.txt $DATA_ROOT/synced
+bash run_all_radarsplat.sh ./seq_demo.txt $DATA_ROOT
 ```
 
 Run **full experiments** in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT/synced
+bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT
 ```
 Run **method ablation** reported in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT/synced
+bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT
 ```
 Run **Gaussian initialization ablation** studies:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT/synced
+bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT
 ```
 Disable wandb by setting USE_WANDB=0 and change assigned GPU id by changing GPU=[ID] in ```run_all_radarsplat.sh, run_all_radarsplat_abla.sh, run_all_radarsplat_init_abla.sh```
 

@@ -65,19 +65,21 @@ python boreas/data_processing/radar_poses_saver.py \
   --data_root "$DATA_ROOT" \
   --seq_name "$SEQ_NAME"
 
-# 6. sync_data.py
-echo "Sync data"
-python boreas/data_processing/sync_data.py \
-  "$DATA_ROOT"$SEQ_NAME \
-  "$DATA_ROOT"synced/$SEQ_NAME
+# # 6. sync_data.py
+# echo "Sync data"
+# python boreas/data_processing/sync_data.py \
+#   "$DATA_ROOT"$SEQ_NAME \
+#   "$DATA_ROOT"_synced/$SEQ_NAME
 
+# 7. radar map to polar
 echo "Convert radar map to polar"
 python boreas/data_processing/radar_map_cart2polar.py \
-  --data_root "$DATA_ROOT" \
+  --data_root "$DATA_ROOT"/ \
   --seq_name "$SEQ_NAME" \
   --radar_avg_map "res:0.0596_dist:50_win_size:5_CR_thres:0.21_smooth:3.0" \
   --resolution $RESOLUTION
 
+# 8. copy sensor.yaml
 echo "Copy sensor.yaml to the sequence folder"
 cp boreas/data_processing/sensor.yaml "$DATA_ROOT"$SEQ_NAME/sensor.yaml
 
