@@ -38,7 +38,7 @@ pip install --upgrade pip
 
 Install CUDA based on your GPU:
 ```bash
-# For CUDA 11.8 (change to CUDA version that support your GPU)
+# For CUDA 11.8 (change a to CUDA version that supports your GPU)
 pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
 python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.get_device_name(0))"
 conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
@@ -46,7 +46,7 @@ pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindi
 ```
 
 ```bash
-# For CUDA 12.8 (change to CUDA version that support your GPU)
+# For CUDA 12.8 (change a to CUDA version that supports your GPU)
 pip install --pre torch torchvision torchaudio \
   --index-url https://pypi.org/simple \
   --extra-index-url https://download.pytorch.org/whl/nightly/cu128
@@ -201,6 +201,7 @@ Recon. Eval. Mean  2.05  0.05      0.91       0.70    0.94
 Image Eval. Mean 26.58  0.53   0.39
                    RMSE  R-CD  accuracy  precision  recall
 Recon. Eval. Mean  1.86  0.23      0.30       0.66    0.30
+...
 ```
 
 ## Rendering/Visualization
@@ -218,3 +219,13 @@ python examples/radar_simple_trainer.py default --ckpt <CHECKPOINT_PATH> --eval_
 
 
 
+### Citation
+If you find this repository helpful, please consider citing our paper.
+```
+@article{kung2025radarsplat,
+  title={RadarSplat: Radar Gaussian Splatting for High-Fidelity Data Synthesis and 3D Reconstruction of Autonomous Driving Scenes},
+  author={Kung, Pou-Chun and Harisha, Skanda and Vasudevan, Ram and Eid, Aline and Skinner, Katherine A},
+  journal={arXiv preprint arXiv:2506.01379},
+  year={2025}
+}
+```
