@@ -28,7 +28,7 @@ Clone the repo:
 git clone --recursive https://github.com/umautobots/radarsplat.git
 ```
 
-Conda environment prepare:
+Prepare conda environment:
 ```bash
 # Create conda environment
 conda create --name radarsplat -y python=3.9
@@ -36,7 +36,7 @@ conda activate radarsplat
 pip install --upgrade pip
 ```
 
-Install CUDA based on your GPU:
+Install Pytorch+CUDA based on your GPU:
 ```bash
 # For CUDA 11.8 (change a to CUDA version that supports your GPU)
 pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
@@ -141,23 +141,23 @@ Run experiments with a demo sequence:
 
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat.sh ./seq_demo.txt
+bash run_all_radarsplat.sh ./seq_demo.txt $DATA_ROOT/synced
 ```
 
 Run **full experiments** in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat.sh ./seq_all.txt
+bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT/synced
 ```
 Run **method ablation** reported in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_abla.sh ./seq_all.txt
+bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT/synced
 ```
 Run **Gaussian initialization ablation** studies:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_init_abla.sh ./seq_all.txt
+bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT/synced
 ```
 Disable wandb by setting USE_WANDB=0 and change assigned GPU id by changing GPU=[ID] in ```run_all_radarsplat.sh, run_all_radarsplat_abla.sh, run_all_radarsplat_init_abla.sh```
 

@@ -7,6 +7,8 @@ SEQUENCE_FILE=$1
 DATA_DIR=$2
 # DATA_DIR="/mnt/ws-frb/projects/radar_splat/data/wave_gs"
 
+RESULT_DIR="./batch_results"
+
 # Shared settings
 INIT_NUM_PTS=20000
 INIT_SCALE=0.5
@@ -65,7 +67,7 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
+  CMD="bash $HOME/gsplat/examples/demo_scripts/run_radarsplat.sh \
     --result_dir $RESULT_DIR \
     --data_dir $DATA_DIR \
     --scene_name $SCENE_NAME \

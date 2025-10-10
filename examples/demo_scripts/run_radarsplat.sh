@@ -77,12 +77,12 @@ if [[ -n "$CKPT_PATH" ]]; then
 fi
 
 # Move back to project root
-cd "$HOME/radarsplat"
+cd "$HOME/gsplat"
 
 # Run training # Config used to report number in the paper
 run_training() {
   local OPA_NOISE_REG_LOSS_LAMBDA="${1:-${OPA_NOISE_REG_LOSS_LAMBDA:-1e3}}"
-  python $HOME/radarsplat/examples/radar_simple_trainer.py default \
+  python $HOME/gsplat/examples/radar_simple_trainer.py default \
       --eval_set val+all \
       --save_fig \
       --use_lidar_map \
