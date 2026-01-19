@@ -135,6 +135,18 @@ The following folders will be created under each boreas sequence folder:
 └── synced_lidar_map_win5
 ```
 
+Then you should copy all .png under the 'radar' folder to a new 'images' folder, so your folder structure will be:
+```
+├── images
+├── sensor.yaml
+├── multipath_model
+├── radar_average_map
+├── radar_average_map_polar
+├── radar_trajectory.tum
+├── synced_lidar
+└── synced_lidar_map_win5
+```
+
 ## Run RadarSplat
 
 Run experiments with a demo sequence:
