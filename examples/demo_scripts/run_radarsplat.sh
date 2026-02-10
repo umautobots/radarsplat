@@ -9,6 +9,7 @@ RADARSPLAT_ROOT="${RADARSPLAT_ROOT:-$HOME/repo/radarsplat}"
 USE_WANDB=0
 CKPT_PATH=""
 VARIANT="default"
+EVAL_SET="val+all"
 
 # Parse input args
 while [[ $# -gt 0 ]]; do
@@ -55,6 +56,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --variant)
       VARIANT="$2"
+      shift 2
+      ;;
+    --eval_set)
+      EVAL_SET="$2"
       shift 2
       ;;
     *)
@@ -128,7 +133,7 @@ cd "$RADARSPLAT_ROOT"
 run_training() {
   local OPA_NOISE_REG_LOSS_LAMBDA="${1:-${OPA_NOISE_REG_LOSS_LAMBDA:-1e3}}"
   python "$RADARSPLAT_ROOT/examples/radar_simple_trainer.py" default \
-      --eval_set val+all \
+      --eval_set "$EVAL_SET" \
       --save_fig \
       --use_lidar_map \
       --no-preprocess_thres \

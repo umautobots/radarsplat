@@ -164,5 +164,9 @@ for EXP in "${EXPERIMENTS[@]}"; do
     CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
+  if [[ "$RENDER_MODE" -eq 1 ]]; then
+    CMD+=" --eval_set all"
+  fi
+
   eval "$CMD"
 done
