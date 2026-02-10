@@ -149,20 +149,36 @@ Then you should copy all .png under the 'radar' folder to a new 'images' folder,
 
 ## Run RadarSplat
 
-Run experiments with a demo sequence:
+Please change RADARSPLAT_ROOT in run_all_radarsplat.sh to your path first.
+
+### Run experiments with a demo sequence:
 
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_demo.txt $DATA_ROOT
 ```
 
-Run **full experiments** in the paper:
+###  Run **full experiments** in the paper:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT
 ```
 
-**Method ablation** : pass the ablation variant as the third argument. Each variant runs the full sequence with one component disabled.
+### Run **Gaussian initialization ablation** studies 
+Varying init number of points and init scale. Results go under `batch_init_ablations/` (e.g. `N_5000/`, `N_40000/`, `S_0.1/`, `S_0.3/`, `S_0.7/`, `S_2.0/`):
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT
+```
+
+###  Run **all method ablations**
+Runs each variant over the full sequence and writes to `batch_ablations/wo_noise_prob/`, `batch_ablations/wo_mp_modeling/`, `batch_ablations/wo_sl/`, `batch_ablations/wo_occ/`, and `batch_ablations/rf_occ/`:
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT
+```
+
+Run individual **Method ablation** : pass the ablation variant as the third argument. Each variant runs the full sequence with one component disabled.
 
 | Variant | Description |
 |--------|-------------|
@@ -177,22 +193,7 @@ cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT no_occ
 ```
 
-To run other ablations, use `no_sl`, `no_mp_modeling`, or `no_noise_prob` as the third argument.
-
-**Run all method ablations** (paper Table 2) in one script — runs each variant over the full sequence and writes to `batch_ablations/wo_noise_prob/`, `batch_ablations/wo_mp_modeling/`, `batch_ablations/wo_sl/`, `batch_ablations/wo_occ/`, and `batch_ablations/rf_occ/`:
-```bash
-cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT
-```
-Usage: `run_all_radarsplat_abla.sh SEQUENCE_FILE DATA_DIR`
-
-**Gaussian initialization ablation** studies (varying init number of points and init scale). Results go under `batch_init_ablations/` (e.g. `N_5000/`, `N_40000/`, `S_0.1/`, `S_0.3/`, `S_0.7/`, `S_2.0/`):
-```bash
-cd ~/radarsplat/examples/demo_scripts
-bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT
-```
-Usage: `run_all_radarsplat_init_abla.sh SEQUENCE_FILE DATA_DIR`
-
+### Other configs 
 Disable wandb by setting USE_WANDB=0 and change the assigned GPU by setting GPU=[ID] in `run_all_radarsplat.sh` (and in `run_all_radarsplat_abla.sh` or `run_all_radarsplat_init_abla.sh` if used). Set `RADARSPLAT_ROOT` in the script(s) you use if the repo is not at `$HOME/repo/radarsplat`.
 
 
