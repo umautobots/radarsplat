@@ -161,21 +161,43 @@ Run **full experiments** in the paper:
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT
 ```
-Run **method ablation** reported in the paper:
+
+**Method ablation** : pass the ablation variant as the third argument. Each variant runs the full sequence with one component disabled.
+
+| Variant | Description |
+|--------|-------------|
+| `no_occ` | w/o occupancy map (occupancy loss disabled) |
+| `no_sl` | w/o spectral leakage modeling |
+| `no_mp_modeling` | w/o multipath modeling (multipath_weight=0) |
+| `no_noise_prob` | w/o noise probability |
+
+Example — run all experiments in `seq_all.txt` with the **no occupancy map** ablation:
+```bash
+cd ~/radarsplat/examples/demo_scripts
+bash run_all_radarsplat.sh ./seq_all.txt $DATA_ROOT no_occ
+```
+
+To run other ablations, use `no_sl`, `no_mp_modeling`, or `no_noise_prob` as the third argument.
+
+**Run all method ablations** (paper Table 2) in one script — runs each variant over the full sequence and writes to `batch_ablations/wo_noise_prob/`, `batch_ablations/wo_mp_modeling/`, `batch_ablations/wo_sl/`, `batch_ablations/wo_occ/`, and `batch_ablations/rf_occ/`:
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat_abla.sh ./seq_all.txt $DATA_ROOT
 ```
-Run **Gaussian initialization ablation** studies:
+Usage: `run_all_radarsplat_abla.sh SEQUENCE_FILE DATA_DIR`
+
+**Gaussian initialization ablation** studies (varying init number of points and init scale). Results go under `batch_init_ablations/` (e.g. `N_5000/`, `N_40000/`, `S_0.1/`, `S_0.3/`, `S_0.7/`, `S_2.0/`):
 ```bash
 cd ~/radarsplat/examples/demo_scripts
 bash run_all_radarsplat_init_abla.sh ./seq_all.txt $DATA_ROOT
 ```
-Disable wandb by setting USE_WANDB=0 and change assigned GPU id by changing GPU=[ID] in ```run_all_radarsplat.sh, run_all_radarsplat_abla.sh, run_all_radarsplat_init_abla.sh```
+Usage: `run_all_radarsplat_init_abla.sh SEQUENCE_FILE DATA_DIR`
+
+Disable wandb by setting USE_WANDB=0 and change the assigned GPU by setting GPU=[ID] in `run_all_radarsplat.sh` (and in `run_all_radarsplat_abla.sh` or `run_all_radarsplat_init_abla.sh` if used). Set `RADARSPLAT_ROOT` in the script(s) you use if the repo is not at `$HOME/repo/radarsplat`.
 
 
-## Evaluation
-Run demo sequence evaluation.
+## Summarize Evaluation
+Run demo sequence evaluation summary.
 ```bash
 python eval_summary.py ./examples/demo_scripts/seq_demo.txt
 ```
@@ -217,10 +239,18 @@ Recon. Eval. Mean  1.86  0.23      0.30       0.66    0.30
 ```
 
 ## Rendering/Visualization
-Render outputs from a trained model using all available frames (train + val) for evaluation and visualization.
-```bash
-python examples/radar_simple_trainer.py default --ckpt <CHECKPOINT_PATH> --eval_set all --save_fig --use_lidar_map
-```
+
+1. Create a render list file (e.g. `seq_demo_render.txt`) with one line per experiment:
+   ```
+   boreas-2021-09-02-11-42 27 67 /path/to/batch_results/<scene>/<run_folder>/ckpts/ckpt_1999_rank0.pt
+   ```
+2. Run with the same interface as training; the script will run in rendering mode if checkpoint is detected from the file:
+   ```bash
+   cd ~/radarsplat/examples/demo_scripts
+   bash run_all_radarsplat.sh ./seq_demo_render.txt $DATA_ROOT
+   ```
+   Renders are saved under the same result layout as training (e.g. `batch_results/.../renders/`).
+
 
 ### TODO
 - [x] Code Release

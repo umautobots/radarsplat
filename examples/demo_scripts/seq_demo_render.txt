@@ -1,0 +1,1 @@
+boreas-2021-09-02-11-42 27 67 /home/pckung/repo/radarsplat/batch_results/boreas-2021-09-02-11-42/boreas-2021-09-02-11-42_frame_27_67_20260209_230825/ckpts/ckpt_1999_rank0.pt

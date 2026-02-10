@@ -2,9 +2,13 @@
 
 # set -e
 
+# Inherited from environment when run via run_all_radarsplat.sh; otherwise default below.
+RADARSPLAT_ROOT="${RADARSPLAT_ROOT:-$HOME/repo/radarsplat}"
+
 # Defaults
 USE_WANDB=0
 CKPT_PATH=""
+VARIANT="default"
 
 # Parse input args
 while [[ $# -gt 0 ]]; do
@@ -49,6 +53,10 @@ while [[ $# -gt 0 ]]; do
       DATA_DIR="$2"
       shift 2
       ;;
+    --variant)
+      VARIANT="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -56,10 +64,48 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Variant-specific trainer args (avoids duplicating full script in run_radarsplat_no_*.sh)
+case "$VARIANT" in
+  default)
+    MULTIPATH_WEIGHT=0.6
+    SPECTRAL_LEAKAGE_ARG="--spectral-leakage"
+    L1OCCLOSS_LAMBDA=10
+    EXTRA_TRAINER_ARGS=""
+    ;;
+  no_occ)
+    MULTIPATH_WEIGHT=0.6
+    SPECTRAL_LEAKAGE_ARG="--spectral-leakage"
+    L1OCCLOSS_LAMBDA=0
+    EXTRA_TRAINER_ARGS=""
+    ;;
+  no_sl)
+    MULTIPATH_WEIGHT=0.6
+    SPECTRAL_LEAKAGE_ARG="--no-spectral-leakage"
+    L1OCCLOSS_LAMBDA=10
+    EXTRA_TRAINER_ARGS=""
+    ;;
+  no_mp_modeling)
+    MULTIPATH_WEIGHT=0.0
+    SPECTRAL_LEAKAGE_ARG="--spectral-leakage"
+    L1OCCLOSS_LAMBDA=10
+    EXTRA_TRAINER_ARGS=""
+    ;;
+  no_noise_prob)
+    MULTIPATH_WEIGHT=0.6
+    SPECTRAL_LEAKAGE_ARG="--spectral-leakage"
+    L1OCCLOSS_LAMBDA=10
+    EXTRA_TRAINER_ARGS="--no-use_noise_probs"
+    ;;
+  *)
+    echo "Unknown variant: $VARIANT (use: default, no_occ, no_sl, no_mp_modeling, no_noise_prob)"
+    exit 1
+    ;;
+esac
+
 # Verify required args
 if [[ -z "$SCENE_NAME" || -z "$FRAME_SELECTION" || -z "$INIT_NUM_PTS" || -z "$INIT_SCALE" || -z "$SYNCED_LIDAR_MAP_NAME" || -z "$RADAR_AVG_MAP_NAME" ]]; then
   echo "Missing required arguments."
-  echo "Usage: $0 --scene_name SCENE --frame_selection START END --init_num_pts N --init_scale S --synced_lidar_map_name NAME --radar_average_map_name NAME [--use_wandb] [--ckpt PATH]"
+  echo "Usage: $0 [--variant VARIANT] --scene_name SCENE --frame_selection START END --init_num_pts N --init_scale S --synced_lidar_map_name NAME --radar_average_map_name NAME [--use_wandb] [--ckpt PATH] --result_dir DIR --data_dir DIR"
   exit 1
 fi
 
@@ -76,13 +122,12 @@ if [[ -n "$CKPT_PATH" ]]; then
   CKPT_ARG="--ckpt $CKPT_PATH"
 fi
 
-# Move back to project root
-cd "$HOME/gsplat"
+cd "$RADARSPLAT_ROOT"
 
-# Run training # Config used to report number in the paper
+# Run training
 run_training() {
   local OPA_NOISE_REG_LOSS_LAMBDA="${1:-${OPA_NOISE_REG_LOSS_LAMBDA:-1e3}}"
-  python $HOME/gsplat/examples/radar_simple_trainer.py default \
+  python "$RADARSPLAT_ROOT/examples/radar_simple_trainer.py" default \
       --eval_set val+all \
       --save_fig \
       --use_lidar_map \
@@ -96,8 +141,8 @@ run_training() {
       --radar_average_map_name "$RADAR_AVG_MAP_NAME" \
       --test-every 5 \
       --radar_map_thres 0.10 \
-      --multipath_weight 0.6 \
-      --spectral-leakage \
+      --multipath_weight "$MULTIPATH_WEIGHT" \
+      $SPECTRAL_LEAKAGE_ARG \
       --sinc_width 2 \
       --max_range 50 \
       --init_num_pts "$INIT_NUM_PTS" \
@@ -105,7 +150,7 @@ run_training() {
       --init_scale "$INIT_SCALE" \
       --max_steps 2000 \
       --opa_noise_reg_loss_lambda "$OPA_NOISE_REG_LOSS_LAMBDA" \
-      --l1occloss_lambda 10 \
+      --l1occloss_lambda "$L1OCCLOSS_LAMBDA" \
       --maxsize_lambda 100 \
       --sh_degree_interval 200 \
       --sh_degree 5 \
@@ -118,7 +163,8 @@ run_training() {
       --eval_steps 2000 \
       --disable_viewer \
       $WANDB_ARGS \
-      $CKPT_ARG
+      $CKPT_ARG \
+      $EXTRA_TRAINER_ARGS
 }
 
 MAX_RETRIES=5
@@ -126,23 +172,18 @@ RETRY_COUNT=0
 
 while true; do
     LOG_FILE="tmp_log/log_attempt_${RETRY_COUNT}.txt"
-    echo "[INFO] Running training attempt #$((RETRY_COUNT + 1))"
+    echo "[INFO] Running training attempt #$((RETRY_COUNT + 1)) (variant=$VARIANT)"
     
-    # Run training and stream output directly to a file
     run_training 2>&1 | tee "$LOG_FILE"
 
-    # Search the log file for error pattern
     if grep -q "\[Nan in loss\]" "$LOG_FILE"; then
         echo "[WARNING] '[Nan in loss]' detected. Retrying after 5s..."
         ((RETRY_COUNT++))
         if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; then
             echo "Exceeded maximum retries ($MAX_RETRIES). Try to run code with low regularization weight."
-            
             ((RETRY_COUNT++))
             LOG_FILE="tmp_log/log_attempt_${RETRY_COUNT}.txt"
-            # Run training with low reg weight
             run_training 1e1 2>&1 | tee "$LOG_FILE"
-
             break
         fi
         sleep 5

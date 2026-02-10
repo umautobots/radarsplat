@@ -2,10 +2,12 @@
 
 # set -e
 
-SEQUENCE_FILE=$1 
-# "SEQUENCE_FILE=./seq_all.txt"
+SEQUENCE_FILE=$1
 DATA_DIR=$2
-# DATA_DIR="/mnt/ws-frb/projects/radar_splat/data/wave_gs"
+
+# Set and export so run_radarsplat.sh uses the same path; only edit here (or set in run_all_radarsplat.sh and export before calling this).
+RADARSPLAT_ROOT="${RADARSPLAT_ROOT:-$HOME/repo/radarsplat}"
+export RADARSPLAT_ROOT
 
 # Shared settings
 INIT_NUM_PTS=20000
@@ -35,18 +37,13 @@ load_experiments_from_file() {
   EXPERIMENTS=()
   
   # Read the file line by line
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
     # Remove leading/trailing whitespace
-    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//')
     
     # Skip empty lines and comments
     if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
       continue
-    fi
-    
-    # Remove quotes if present
-    if [[ "$line" =~ ^\".*\"$ ]]; then
-      line=$(echo "$line" | sed 's/^"//;s/"$//')
     fi
     
     # Add to experiments array
@@ -69,14 +66,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -84,10 +81,10 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
 #---------------------------------------------------------------------------
 RESULT_DIR="./batch_init_ablations/N_40000/"
@@ -98,14 +95,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -113,10 +110,10 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
 #---------------------------------------------------------------------------
 RESULT_DIR="./batch_init_ablations/S_0.1/"
@@ -127,14 +124,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -142,10 +139,10 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
 #---------------------------------------------------------------------------
 RESULT_DIR="./batch_init_ablations/S_0.3/"
@@ -156,14 +153,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -171,10 +168,10 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
 #---------------------------------------------------------------------------
 RESULT_DIR="./batch_init_ablations/S_0.7/"
@@ -185,14 +182,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -200,10 +197,10 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
 #---------------------------------------------------------------------------
 RESULT_DIR="./batch_init_ablations/S_2.0/"
@@ -214,14 +211,14 @@ for EXP in "${EXPERIMENTS[@]}"; do
 
   echo "Launching experiment: scene=$SCENE_NAME, frames=[$FRAME_START, $FRAME_END], ckpt=${CKPT_PATH:-<none>}"
 
-  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $HOME/radarsplat/examples/demo_scripts/run_radarsplat.sh \
-    --result_dir $RESULT_DIR \
-    --data_dir $DATA_DIR \
-    --scene_name $SCENE_NAME \
+  CMD="CUDA_VISIBLE_DEVICES=$GPU bash $RADARSPLAT_ROOT/examples/demo_scripts/run_radarsplat.sh \
+    --result_dir \"$RESULT_DIR\" \
+    --data_dir \"$DATA_DIR\" \
+    --scene_name \"$SCENE_NAME\" \
     --frame_selection $FRAME_START $FRAME_END \
     --init_num_pts $INIT_NUM_PTS \
     --init_scale $INIT_SCALE \
-    --synced_lidar_map_name $SYNCED_LIDAR_MAP_NAME \
+    --synced_lidar_map_name \"$SYNCED_LIDAR_MAP_NAME\" \
     --radar_average_map_name \"$RADAR_AVG_MAP_NAME\""
 
   if [[ "$USE_WANDB" -eq 1 ]]; then
@@ -229,8 +226,8 @@ for EXP in "${EXPERIMENTS[@]}"; do
   fi
 
   if [[ -n "$CKPT_PATH" ]]; then
-    CMD+=" --ckpt $CKPT_PATH"
+    CMD+=" --ckpt \"$CKPT_PATH\""
   fi
 
-  eval $CMD
+  eval "$CMD"
 done
